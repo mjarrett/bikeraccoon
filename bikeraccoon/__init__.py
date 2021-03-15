@@ -1,64 +1,118 @@
 import pandas as pd
 import datetime as dt
 import requests
+import calendar
 
 class APIBase():
-    
+
     def __init__(self):
-        self.api_base_url = 'http://api2.mikejarrett.ca'
-        
-        
-        
+        self.api_base_url = 'http://api.raccoon.bike'
+
+
+
 class LiveAPI(APIBase):
     def __init__(self,system):
         super().__init__()
         self.system = system
-        
-        
+
+    def get_system_info(self):
+        systems = get_systems()
+        return systems[systems['name']==self.system].to_dict('records')[0]
+
     def get_system_trips(self,t1,t2=None,freq='h'):
-        t1,t2 = dates2strings(t1,t2)
-        
+        t1,t2 = _dates2strings(t1,t2,freq)
+
         query_url = f'/activity?system={self.system}&start={t1}&end={t2}&frequency={freq}'
         print(self.api_base_url + query_url)
-        return to_df(self.api_base_url + query_url)
-    
+        return _to_df(self.api_base_url + query_url)
+
     def get_station_trips(self,t1,t2=None,freq='h',station='all'):
-        t1,t2 = dates2strings(t1,t2)
-        
+        t1,t2 = _dates2strings(t1,t2,freq)
+
         query_url = f'/activity?system={self.system}&start={t1}&end={t2}&frequency={freq}&station={station}'
         print(self.api_base_url + query_url)
-        df =  to_df(self.api_base_url + query_url)
+        df =  _to_df(self.api_base_url + query_url)
         return df
 
     def get_free_bike_trips(self,t1,t2=None,freq='h'):
-        t1,t2 = dates2strings(t1,t2)
+        t1,t2 = _dates2strings(t1,t2,freq)
 
         query_url = f'/activity?system={self.system}&start={t1}&end={t2}&frequency={freq}&station=free_bikes'
         print(self.api_base_url + query_url)
-        df =  to_df(self.api_base_url + query_url)
+        df =  _to_df(self.api_base_url + query_url)
         return df
-    
-    
-    def get_systems(self):
-        query_url = f'/systems'
-        r = requests.get(self.api_base_url + query_url)
-        df =  pd.DataFrame(r.json())
+
+    def get_stations(self):
+        query_url = f"/stations?system={self.system}"
         print(self.api_base_url + query_url)
+        r = requests.get(APIBase().api_base_url + query_url)
+        df =  pd.DataFrame(r.json())
         return df
-        
-        
-def dates2strings(t1,t2):
+
+    def query_free_bikes(self):
+
+        """
+        Query free_bikes.json
+        """
+
+        sys_url = self.get_system_info()['url']
+        try:
+            url = _get_free_bike_url(sys_url)
+        except IndexError:
+            return None
+
+        r = requests.get(url)
+        data = r.json()
+
+        df = pd.DataFrame(data['data']['bikes'])
+
+        try:
+            df['bike_id'] = df['bike_id'].astype(str)
+        except KeyError:
+            return None
+
+        df['datetime'] = data['last_updated']
+        df['datetime'] = df['datetime'].map(lambda x: dt.datetime.utcfromtimestamp(x))
+        df['datetime'] = df['datetime'].dt.tz_localize('UTC')
+
+
+        df = df[['bike_id','lat','lon','datetime']]
+
+        return df
+
+
+def get_systems():
+    query_url = f'/systems'
+    r = requests.get(APIBase().api_base_url + query_url)
+    df =  pd.DataFrame(r.json())
+#     print(self.api_base_url + query_url)
+    return df
+
+
+def _dates2strings(t1,t2,freq='h'):
     if t2 is None:
-        t2 = t1
+        if freq=='h':
+            t2 = t1
+        elif freq=='d':
+            t1 = t1.replace(hour=0)
+            t2 = t1.replace(hour=23)
+        elif freq=='m':
+            t1 = t1.replace(hour=0,day=1)
+            last_day = calendar.monthrange(t1.year, t1.month)[1]
+            t2 = t1.replace(hour=23,day=last_day)
+        elif freq=='y':
+            t1 = t1.replace(hour=0,day=1,month=1)
+            t2 = t1.replace(hour=23,day=31,month=12)
+
     if t2 < t1:
         t1,t2 = t2,t1
-            
+
     t1 = t1.strftime('%Y%m%d%H')
     t2 = t2.strftime('%Y%m%d%H')
-    
+
     return t1,t2
 
-def to_df(url):
+def _to_df(url):
 
     r = requests.get(url)
     df =  pd.DataFrame(r.json())
@@ -70,3 +124,10 @@ def to_df(url):
     df = df.set_index('datetime')
     df.index = pd.to_datetime(df.index)
     return df
+
+
+
+def _get_free_bike_url(sys_url):
+    r = requests.get(sys_url)
+    data = r.json()
+    return [x for x in data['data']['en']['feeds'] if x['name']=='free_bike_status'][0]['url']
