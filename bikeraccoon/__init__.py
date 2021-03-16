@@ -2,6 +2,7 @@ import pandas as pd
 import datetime as dt
 import requests
 import calendar
+import sys
 
 class APIBase():
 
@@ -11,9 +12,11 @@ class APIBase():
 
 
 class LiveAPI(APIBase):
-    def __init__(self,system):
+    def __init__(self,system, echo=False):
         super().__init__()
         self.system = system
+        self.info = self.get_system_info()
+        self.echo = echo
 
     def get_system_info(self):
         systems = get_systems()
@@ -26,11 +29,12 @@ class LiveAPI(APIBase):
         print(self.api_base_url + query_url)
         return _to_df(self.api_base_url + query_url)
 
-    def get_station_trips(self,t1,t2=None,freq='h',station='all'):
+    def get_station_trips(self,t1,t2=None,freq='h',station='all',format='long'):
         t1,t2 = _dates2strings(t1,t2,freq)
 
         query_url = f'/activity?system={self.system}&start={t1}&end={t2}&frequency={freq}&station={station}'
-        print(self.api_base_url + query_url)
+        if self.echo:
+            print(self.api_base_url + query_url)
         df =  _to_df(self.api_base_url + query_url)
         return df
 
@@ -38,15 +42,20 @@ class LiveAPI(APIBase):
         t1,t2 = _dates2strings(t1,t2,freq)
 
         query_url = f'/activity?system={self.system}&start={t1}&end={t2}&frequency={freq}&station=free_bikes'
-        print(self.api_base_url + query_url)
+        if self.echo:
+            print(self.api_base_url + query_url)
         df =  _to_df(self.api_base_url + query_url)
         return df
 
     def get_stations(self):
         query_url = f"/stations?system={self.system}"
-        print(self.api_base_url + query_url)
+        if self.echo:
+            print(self.api_base_url + query_url)
         r = requests.get(APIBase().api_base_url + query_url)
         df =  pd.DataFrame(r.json())
+
+        if len(df) == 0:
+            return None
         return df
 
     def query_free_bikes(self):
