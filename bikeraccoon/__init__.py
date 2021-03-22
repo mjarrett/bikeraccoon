@@ -26,7 +26,8 @@ class LiveAPI(APIBase):
         t1,t2 = _dates2strings(t1,t2,freq)
 
         query_url = f'/activity?system={self.system}&start={t1}&end={t2}&frequency={freq}'
-        print(self.api_base_url + query_url)
+        if self.echo:
+            print(self.api_base_url + query_url)
         return _to_df(self.api_base_url + query_url)
 
     def get_station_trips(self,t1,t2=None,freq='h',station='all',format='long'):
@@ -36,6 +37,8 @@ class LiveAPI(APIBase):
         if self.echo:
             print(self.api_base_url + query_url)
         df =  _to_df(self.api_base_url + query_url)
+        if len(df) == 0:
+            return None
         return df
 
     def get_free_bike_trips(self,t1,t2=None,freq='h'):
@@ -45,6 +48,8 @@ class LiveAPI(APIBase):
         if self.echo:
             print(self.api_base_url + query_url)
         df =  _to_df(self.api_base_url + query_url)
+        if len(df) == 0:
+            return None
         return df
 
     def get_stations(self):
