@@ -4,6 +4,8 @@ import requests
 import calendar
 import sys
 
+from functools import cached_property, lru_cache
+
 class APIBase():
 
     def __init__(self):
@@ -12,16 +14,21 @@ class APIBase():
 
 
 class LiveAPI(APIBase):
-    def __init__(self,system, echo=False):
+    def __init__(self,system, echo=False, cache=False):
         super().__init__()
         self.system = system
         self.info = self.get_system_info()
         self.echo = echo
+        
+        self.cache_size=12 if cache else 0
+
+        
 
     def get_system_info(self):
         systems = get_systems()
         return systems[systems['name']==self.system].to_dict('records')[0]
 
+    @lru_cache
     def get_system_trips(self,t1,t2=None,freq='h'):
         t1,t2 = _dates2strings(t1,t2,freq)
 
@@ -30,6 +37,8 @@ class LiveAPI(APIBase):
             print(self.api_base_url + query_url)
         return _to_df(self.api_base_url + query_url)
 
+    
+    @lru_cache
     def get_station_trips(self,t1,t2=None,freq='h',station='all',format='long'):
         t1,t2 = _dates2strings(t1,t2,freq)
 
@@ -40,7 +49,8 @@ class LiveAPI(APIBase):
         if len(df) == 0:
             return None
         return df
-
+    
+    @lru_cache
     def get_free_bike_trips(self,t1,t2=None,freq='h'):
         t1,t2 = _dates2strings(t1,t2,freq)
 
@@ -52,6 +62,7 @@ class LiveAPI(APIBase):
             return None
         return df
 
+    @lru_cache
     def get_stations(self):
         query_url = f"/stations?system={self.system}"
         if self.echo:
@@ -63,6 +74,7 @@ class LiveAPI(APIBase):
             return None
         return df
 
+    
     def query_free_bikes(self):
 
         """
