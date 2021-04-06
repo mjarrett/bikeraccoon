@@ -14,13 +14,13 @@ class APIBase():
 
 
 class LiveAPI(APIBase):
-    def __init__(self,system, echo=False, cache=False):
+    def __init__(self,system, echo=False):
         super().__init__()
         self.system = system
         self.info = self.get_system_info()
         self.echo = echo
         
-        self.cache_size=12 if cache else 0
+
 
         
 
@@ -35,7 +35,7 @@ class LiveAPI(APIBase):
         query_url = f'/activity?system={self.system}&start={t1}&end={t2}&frequency={freq}'
         if self.echo:
             print(self.api_base_url + query_url)
-        return _to_df(self.api_base_url + query_url)
+        return self._to_df(self.api_base_url + query_url)
 
     
     @lru_cache
@@ -45,7 +45,7 @@ class LiveAPI(APIBase):
         query_url = f'/activity?system={self.system}&start={t1}&end={t2}&frequency={freq}&station={station}'
         if self.echo:
             print(self.api_base_url + query_url)
-        df =  _to_df(self.api_base_url + query_url)
+        df =  self._to_df(self.api_base_url + query_url)
         if len(df) == 0:
             return None
         return df
@@ -57,7 +57,7 @@ class LiveAPI(APIBase):
         query_url = f'/activity?system={self.system}&start={t1}&end={t2}&frequency={freq}&station=free_bikes'
         if self.echo:
             print(self.api_base_url + query_url)
-        df =  _to_df(self.api_base_url + query_url)
+        df =  self._to_df(self.api_base_url + query_url)
         if len(df) == 0:
             return None
         return df
@@ -106,7 +106,25 @@ class LiveAPI(APIBase):
 
         return df
 
+    def _to_df(self,url):
 
+        r = requests.get(url)
+        df =  pd.DataFrame(r.json())
+        if len(df) == 0:
+            df = pd.DataFrame(columns=['num_bikes_available','num_docks_available','returns','station','station_id','trips'],
+                               )
+            df.index.name = 'datetime'
+            return df
+
+        # Chopping then re-adding the timezone info is necessary to get a nice pandas datetime index
+        df['datetime'] = pd.to_datetime(df['datetime'].map(lambda x: x[:-6])).dt.tz_localize(self.info['tz'])
+        df = df.set_index('datetime')
+
+        return df
+    
+    
+    
+    
 def get_systems():
     query_url = f'/systems'
     r = requests.get(APIBase().api_base_url + query_url)
@@ -138,18 +156,11 @@ def _dates2strings(t1,t2,freq='h'):
 
     return t1,t2
 
-def _to_df(url):
 
-    r = requests.get(url)
-    df =  pd.DataFrame(r.json())
-    if len(df) == 0:
-        df = pd.DataFrame(columns=['num_bikes_available','num_docks_available','returns','station','station_id','trips'],
-                           )
-        df.index.name = 'datetime'
-        return df
-    df = df.set_index('datetime')
-    df.index = pd.to_datetime(df.index)
-    return df
+    
+    
+    
+    
 
 
 
@@ -157,3 +168,6 @@ def _get_free_bike_url(sys_url):
     r = requests.get(sys_url)
     data = r.json()
     return [x for x in data['data']['en']['feeds'] if x['name']=='free_bike_status'][0]['url']
+
+
+
