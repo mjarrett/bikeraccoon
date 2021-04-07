@@ -6,6 +6,8 @@ import sys
 
 from functools import cached_property, lru_cache
 
+import plots
+
 class APIBase():
 
     def __init__(self):
@@ -116,8 +118,9 @@ class LiveAPI(APIBase):
             df.index.name = 'datetime'
             return df
 
-        # Chopping then re-adding the timezone info is necessary to get a nice pandas datetime index
-        df['datetime'] = pd.to_datetime(df['datetime'].map(lambda x: x[:-6])).dt.tz_localize(self.info['tz'])
+        # Need to import as UTC then re-set TZ because of some DST issues.
+        df['datetime'] = pd.to_datetime(df['datetime'], utc=True).dt.tz_convert(self.info['tz'])
+        
         df = df.set_index('datetime')
 
         return df
