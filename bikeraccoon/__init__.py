@@ -37,17 +37,19 @@ class LiveAPI(APIBase):
             print(self.api_base_url + query_url)
         df =  self._to_df(self.api_base_url + query_url)
 
-        # Add any missing dates - we want to return a continuous datetime range 
-        df = df.asfreq(freq)
-        df = df.fillna(0)
+        # Add any missing dates - we want to return a continuous datetime range
+        # There's a bug when I do this with 'm' and 'y' freq. not sure why, need to investigate.
+        if freq in ['h','d']:
+            df = df.asfreq(freq)
+            df = df.fillna(0)
         return df
         
     
     @lru_cache
-    def get_station_trips(self,t1,t2=None,freq='h',station='all',format='long'):
+    def get_station_trips(self,t1,t2=None,freq='h',station='all',format='long',limit=None):
         t1,t2 = _dates2strings(t1,t2,freq)
 
-        query_url = f'/activity?system={self.system}&start={t1}&end={t2}&frequency={freq}&station={station}'
+        query_url = f'/activity?system={self.system}&start={t1}&end={t2}&frequency={freq}&station={station}&limit={limit}'
         if self.echo:
             print(self.api_base_url + query_url)
         df =  self._to_df(self.api_base_url + query_url)
