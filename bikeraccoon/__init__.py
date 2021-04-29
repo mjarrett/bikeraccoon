@@ -4,6 +4,7 @@ import requests
 import calendar
 import sys
 
+
 from functools import cached_property, lru_cache
 
 class APIBase():
@@ -97,15 +98,22 @@ class LiveAPI(APIBase):
         r = requests.get(url)
         data = r.json()
 
-        df = pd.DataFrame(data['data']['bikes'])
-
+        
+        try:
+            df = pd.DataFrame(data['data']['bikes'])
+        except KeyError:
+            df = pd.DataFrame(data['bikes'])
         try:
             df['bike_id'] = df['bike_id'].astype(str)
         except KeyError:
             return None
 
-        df['datetime'] = data['last_updated']
-        df['datetime'] = df['datetime'].map(lambda x: dt.datetime.utcfromtimestamp(x))
+        try:
+            df['datetime'] = data['last_updated']
+            df['datetime'] = df['datetime'].map(lambda x: dt.datetime.utcfromtimestamp(x))
+        except KeyError:
+            df['datetime'] = dt.datetime.utcnow()
+        
         df['datetime'] = df['datetime'].dt.tz_localize('UTC')
 
 
