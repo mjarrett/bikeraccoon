@@ -40,5 +40,9 @@ Returns a dataframe with data for free-floating bike trips
 
 The API calls use LRU caching to avoid repeatedly querying the API with the same query.
 
+## Twitter bikesharebots
+
+Several twitter bots use this package to generate stats and figures, such as [VanBikeShareBot](https://twitter.com/vanbikesharebot). For an example of this, see the file `sample_bikesharebot.py`. 
+
 
 
