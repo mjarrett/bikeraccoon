@@ -125,7 +125,45 @@ def plot_alltime_trips(api,t1,t2,kind,ax=None, palette=None):
 
 
 
+def plot_alltime_trips2(api,t1,t2,kind,ax=None, palette=None):
+    sns.set(style='ticks', palette=palette)  
+    color = sns.color_palette()[0]
+    color = sns.color_palette()[0]
 
+    if ax is None:
+        f,ax = plt.subplots()
+
+
+    trips = api.get_system_trips(t1,t2, freq='d')    
+        
+        
+    if kind == 'stations':
+        trips = trips['station trips']
+    elif kind == 'floating':
+        trips = trips['free bike trips']
+    elif kind == 'hybrid':
+        trips = trips['station trips'] + trips['free bike trips'] 
+
+
+
+    #ax.xaxis.set_major_locator(mdates.YearLocator(1,1,2,tz=trips.index.tz))
+    #ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y",tz=trips.index.tz))
+    ax.xaxis.set_major_locator(mdates.MonthLocator(tz=trips.index.tz))
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%B",tz=trips.index.tz))
+    
+    ax.tick_params(axis='x',labelrotation=45)
+    for trips_yr in trips.groupby(trips.index.year):
+        year = trips_yr[0]
+        trips_yr = trips_yr[1]
+        trips_yr.index = trips_yr.index.map(lambda t: t.replace(year=2020))
+        ax.plot(trips_yr.index,trips_yr.values, color='grey', linewidth=0.5, alpha=0.6)
+    ax.plot(trips_yr.index,trips_yr.values, alpha=1.0, color=palette[0], linewidth=1.3, label=f"{year}")
+    ax.plot(trips_yr.index[-1], trips_yr.values[-1], marker='o', markersize=4, markeredgecolor='k', color=palette[0])
+    ax.set_ylabel('Daily trips')
+    sns.despine()
+    ax.grid(which='both')
+    ax.legend()
+    return ax
  
 
 

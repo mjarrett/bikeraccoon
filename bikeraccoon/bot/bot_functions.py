@@ -123,7 +123,7 @@ def make_alltime_plot(api,path='./'):
     t2 = yday
 
     f,ax = plt.subplots()
-    plots.plot_alltime_trips(api,t1,t2,api.sys_type,ax=ax, palette=api.palette)
+    plots.plot_alltime_trips2(api,t1,t2,api.sys_type,ax=ax, palette=api.palette)
     f.tight_layout()
     f.savefig(f"{path}/3.{api.sys_name}_alltime.png")
            
