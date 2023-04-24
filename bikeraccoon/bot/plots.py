@@ -7,18 +7,6 @@ import pandas as pd
 
 from bikeraccoon.bot.weather import *
 
-
-
-c_blue =     '#3286AD' 
-c_light_blue='#50AAD3'
-c_indigo =   '#8357B2'
-c_red =      '#FF5B71'
-c_yellow =   '#E5DE50' 
-c_green =    '#77ACA2'
-
-
-
-
 def plot_hourly_trips(api,kind,t1,t2,ax=None, palette=None):
     sns.set(style='ticks', palette=palette)  
     color = sns.color_palette()[0]
@@ -124,7 +112,6 @@ def plot_alltime_trips(api,t1,t2,kind,ax=None, palette=None):
     return ax
 
 
-
 def plot_alltime_trips2(api,t1,t2,kind,ax=None, palette=None):
     sns.set(style='ticks', palette=palette)  
     color = sns.color_palette()[0]
@@ -164,7 +151,15 @@ def plot_alltime_trips2(api,t1,t2,kind,ax=None, palette=None):
     ax.grid(which='both')
     ax.legend()
     return ax
- 
+
+
+
+c_blue =     '#3286AD' #// primary
+c_light_blue='#50AAD3'
+c_indigo =   '#8357B2' #// info
+c_red =      '#FF5B71' # // danger
+c_yellow =   '#E5DE50' #// warning
+c_green =    '#77ACA2' #// success
 
 
 def plot_daily_weather(api,date1,date2,ax=None):
@@ -181,10 +176,10 @@ def plot_daily_weather(api,date1,date2,ax=None):
     ax2 = ax.twinx()
 
     ax.set_ylabel('Daily high')
-    ax2.bar(df.index,df['precipIntensity'].values*24,color=c_light_blue)
+    ax2.bar(df.index,df['precip'].values*24,color=c_light_blue)
 #     ax2.bar(df.index,df['precipIntensity'].values,color='#3778bf',zorder=1001,width=1/24)
 
-    ax.plot(df.index,df['temperatureHigh'],color=c_yellow,zorder=1000)
+    ax.plot(df.index,df['tempmax'],color=c_yellow,zorder=1000)
     ax2.set_ylabel('Precipitation')
     ax.yaxis.label.set_color(c_yellow)
     ax2.yaxis.label.set_color(c_light_blue)
@@ -224,9 +219,9 @@ def plot_hourly_weather(api,date1,date2,ax=None):
 
     ax.set_ylabel('Temperature')
 #     ax2.bar(df.index,df['precipIntensity'].values,color='#3778bf',zorder=1001,width=1/24)
-    ax2.plot(df.index,df['precipIntensity'].values,color=c_light_blue,zorder=1001)
-    ax2.fill_between(df.index,0,df['precipIntensity'].values,alpha=0.8,color=c_light_blue)
-    ax.plot(df.index,df['temperature'],color=c_yellow,zorder=1000)
+    ax2.plot(df.index,df['precip'].values,color=c_light_blue,zorder=1001)
+    ax2.fill_between(df.index,0,df['precip'].values,alpha=0.8,color=c_light_blue)
+    ax.plot(df.index,df['temp'],color=c_yellow,zorder=1000)
     ax2.set_ylabel('Precipitation')
     ax.yaxis.label.set_color(c_yellow)
     ax2.yaxis.label.set_color(c_light_blue)
@@ -237,8 +232,8 @@ def plot_hourly_weather(api,date1,date2,ax=None):
     ax.tick_params(axis='x',labelrotation=45)
     ax2.tick_params(axis='x',labelrotation=45)
     
-    if df['precipIntensity'].max()>2.5:
-        ymax = df['precipIntensity'].max()
+    if df['precip'].max()>2.5:
+        ymax = df['precip'].max()
     else:
         ymax = 2.5
     ax2.set_ylim(0,ymax)
