@@ -3,39 +3,6 @@ import json
 import urllib
 import datetime as dt
 
-def query_weather_day(api,freq,time):
-    
-    sdf = api.get_stations()
-    lat = sdf['lat'].mean()
-    lon = sdf['lon'].mean()
-    
-    
-    timestr = time.strftime('%Y-%m-%dT01:00:00')
-
-    weather_url = f'https://api.darksky.net/forecast/{api.DARKSKY_KEY}/{lat},{lon},{timestr}?units=si'
-    with urllib.request.urlopen(weather_url) as url:    
-        data = json.loads(url.read().decode())
-
-    hdf = pd.DataFrame(data['hourly']['data']).set_index('time')
-    hdf.index = [dt.datetime.utcfromtimestamp(x,) for x in hdf.index]
-    hdf.index = hdf.index.tz_localize('UTC').tz_convert(api.info['tz'])
-
-    ddf = pd.DataFrame(data['daily']['data']).set_index('time')
-    ddf.index = [dt.datetime.utcfromtimestamp(x) for x in ddf.index]
-    ddf.index = ddf.index.tz_localize('UTC').tz_convert(api.info['tz'])
-
-    if freq == 'hourly':
-        return hdf
-    elif freq == 'daily':
-        return ddf
-    elif freq == 'both':
-        return hdf,ddf
-    else:
-        raise ValueError("Unrecognized option for freq. Use hourly, daily or both")
-                            
-    return df
-
-
 def get_weather_range(api,freq,day1,day2=None):
     """
     api: a bikeraccoon API instance
@@ -45,18 +12,32 @@ def get_weather_range(api,freq,day1,day2=None):
     Returns a pandas.DataFrame
     
     """
-
-    
+    sdf = api.get_stations()
+    lat = sdf['lat'].mean()
+    lon = sdf['lon'].mean()
     if day2 is None:
-        df = query_weather_day(api,freq,day1)
+        day2 = day1
     else:
         
         if day2 < day1:
             day1,day2 = day2,day1
-        
-        days = list(pd.date_range(day1,day2,freq='d', ambiguous=True))
-        df = pd.concat([query_weather_day(api,freq,x) for x in days])
+            
+    day1 = day1.strftime('%Y-%m-%d')
+    day2 = day2.strftime('%Y-%m-%d')   
     
 
-    
+    weather_url = f'https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/{lat}%2C{lon}/{day1}/{day2}?unitGroup=metric&key={api.VISUAL_CROSSING_KEY}&contentType=json'
+    with urllib.request.urlopen(weather_url) as url:    
+        #data = json.loads(url.read().decode())
+        data = url.read().decode()
+
+        
+    if freq == 'daily':
+        df = pd.DataFrame(json.loads(data)['days'])
+        df.index = [dt.datetime.utcfromtimestamp(x) for x in df['datetimeEpoch']]
+        
+    elif freq == 'hourly':
+        df = pd.concat([pd.DataFrame(day['hours']) for day in json.loads(data)['days']])
+        df.index = [dt.datetime.utcfromtimestamp(x) for x in df['datetimeEpoch']]
+            
     return df
