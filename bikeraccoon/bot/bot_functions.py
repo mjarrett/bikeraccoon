@@ -80,7 +80,7 @@ def make_tweet_text(api,path='./', lang='EN'):
 Most used station: {busiest_station}{n_busiest_str} ({busiest_station_trips} trips)
 Least used station: {least_busy_station}{n_least_busy_str} ({least_busy_station_trips} trips)
 Active stations: {active_stations}
-{api.hashtag}"""
+"""
         
     elif lang=='FR':
         s=f"""Hier, il y a eu approximativement {ntrips:,} déplacements en vélopartage {api.brand}.
@@ -133,4 +133,4 @@ def make_stations_map(api,path='./'):
     t2 = yday.replace(hour=23)
     f,ax = plots.plot_stations(api,t1,t2,extent=api.extent, palette=api.palette)
     f.savefig(f'{path}/4.{api.sys_name}_stations.png',
-                  bbox_inches='tight',pad_inches=0.0,transparent=False,dpi=300)
+                  bbox_inches='tight',pad_inches=0.0,transparent=False,dpi=100)

@@ -26,9 +26,10 @@ def plot_hourly_trips(api,kind,t1,t2,ax=None, palette=None):
 
     
     line = ax.plot(trips.index,trips.values,color=color)
-
-    ax.fill_between(trips.index,0,trips.values,alpha=0.4,color=color)
     
+    
+    ax.fill_between(trips.index,0,trips.values,alpha=0.4,color=color)
+    ax.xaxis_date(trips.index.tz) # Required for xaxis to be correct timezone
     ax.xaxis.set_major_locator(mdates.DayLocator(tz=trips.index.tz))
     ax.xaxis.set_major_formatter(mdates.DateFormatter("%A",tz=trips.index.tz))
     #ax.xaxis.get_ticklabels()[-1].set_visible(False)

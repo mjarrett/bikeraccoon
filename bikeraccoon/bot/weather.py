@@ -25,8 +25,12 @@ def get_weather_range(api,freq,day1,day2=None):
     day1 = day1.strftime('%Y-%m-%d')
     day2 = day2.strftime('%Y-%m-%d')   
     
+    if freq == 'daily':
+        freq_key = 'days'
+    elif freq == 'hourly':
+        freq_key = 'hours'
 
-    weather_url = f'https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/{lat}%2C{lon}/{day1}/{day2}?unitGroup=metric&key={api.VISUAL_CROSSING_KEY}&contentType=json'
+    weather_url = f'https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/{lat}%2C{lon}/{day1}/{day2}?unitGroup=metric&key={api.VISUAL_CROSSING_KEY}&contentType=json&include={freq_key}'
     with urllib.request.urlopen(weather_url) as url:    
         #data = json.loads(url.read().decode())
         data = url.read().decode()
