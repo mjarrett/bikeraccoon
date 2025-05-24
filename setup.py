@@ -8,6 +8,6 @@ setup(name='bikeraccoon',
       author='Mike Jarrett',
       author_email='msjarrett@gmail.com',
       url='raccoon.bike',
-      packages=['bikeraccoon'],
+      packages = find_packages(include=['bikeraccoon', 'bikeraccoon.*']),
       install_requires=['pandas','requires','duckdb','pyarrow','dash','flask'],
      )
