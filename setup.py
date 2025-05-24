@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 from distutils.core import setup
-
+from setuptools import find_packages
 setup(name='bikeraccoon',
       version='1.0',
       description='Python utilities for accessing the raccoon.bike bikeshare API',
