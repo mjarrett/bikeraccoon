@@ -6,10 +6,10 @@ import sys
 import pathlib
 import glob
 
-import tracker
-import api 
-import dash
-import gbfs
+from . import tracker
+from . import api 
+from . import dash
+from . import gbfs
 
 from functools import cached_property, lru_cache
 
