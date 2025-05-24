@@ -1,0 +1,59 @@
+<h1 id="bikeraccoonapi">bikeraccoonAPI</h1>
+<p>This is the source code for both the GBFS tracking app and API server hosted at <a href="https://api.raccoon.bike">api.raccoon.bike</a></p>
+<h2 id="gbfs-tracker">GBFS Tracker</h2>
+<p>Many bike share systems worldwide provide real-time access to system information via the GBFS specification. For more information about GBFS, see <a href="https://github.com/NABSA/gbfs">the GBFS github repo</a>. GBFS provides the number of bikes and docks at each station and the number of available floating bikes, but it does <em>not</em> provide trip information. By monitoring the number of available bikes in a system and tracking changes over time this tool estimates the number of trips in a system each hour. For a more detailed explanation of how a previous implementation of this tool works, see <a href="https://notes.mikejarrett.ca/tracking-bikeshare-use-using-gbfs-feeds/">this blog post</a>. </p>
+<p>It&#39;s important to keep in mind that the trip counts infered by this tracker are estimates only and may vary substantially from official counts.</p>
+<h2 id="bike-raccoon-api">Bike Raccoon API</h2>
+<h3>New in version 2.0</h3>
+<h4>Change in API resonse</h4>
+<p></p>The main response is now nested under the 'data' attribute. This allows us to also provide some metadata in the response, such as query time and versioning information.<p></p>
+<h4>Improved handling of <i>free_bikes</i> feed</h4>
+<p>The original version queried both <i>station_status.json</i> and <i>free_bikes.json</i> and saved free bike trips by creating a "station" called "free_bikes". This does not accurately represent how GBFS feeds work in theory or practice. The station_status and free_bike feeds can be independant or overlapping in different situations.</p>
+<p>Now we treat the station_status and free_bikes feeds independently and require the user to specify "station" or "free_bike" <i>feed</i> parameter the when querying system activity. We leave to the user to determine whether it's appropriate to combine both feeds when computing total trips in a system.</p>
+<p><i>In GBFS v3.0 the free_bike_status.json feed is rename vehicle_status.json</i></p>
+<h4>Vehicle Types</h4>
+<p>We are now tracking vehicle types when available, in both station_status and free_bike_status feeds. Specify the <i>vehicle</i> parameter with the relevant vehicle_id to filter trips by vehicle type.</p>
+<p>Vehicle types for each system can be accessed via the "vehicle" endpoint</p>
+<h3>Endpoints</h3>
+<p>To access the data collected by the tracker, we provide the following HTTP endpoints. All endpoints return JSON text.</p>
+<ul>
+<li><p><strong>systems</strong></p>
+<p>Returns a list of systems being tracked along with some system metadata.</p>
+<p><em>Example</em>: <a href="https://api.raccoon.bike/systems">https://api.raccoon.bike/systems</a></p>
+</li>
+<li><p><strong>stations</strong></p>
+<p>Returns a list of stations for a given system along with station metadata.</p>
+<p><em>Parameters</em>: 
+  system: the system name (as specified in the systems endpoint)</p>
+<p><em>Example</em>: <a href="https://api.raccoon.bike/stations?system=bike_share_toronto">https://api.raccoon.bike/stations?system=bike_share_toronto</a></p>
+</li>
+<li><p><strong>vehicles</strong></p>
+<p>Returns a list of vehicle types for a given system.</p>
+<p><em>Parameters</em>: 
+  system: the system name (as specified in the systems endpoint)</p>
+<p><em>Example</em>: <a href="https://api.raccoon.bike/vehicles?system=bike_share_toronto">https://api.raccoon.bike/stations?system=bike_share_toronto</a></p>
+</li>
+<li><p><strong>activity</strong></p>
+<p>Returns trip activity data</p>
+<p><em>Parameters</em>:
+    <ul>
+        <li>  system: the system name (as specified in the systems endpoint)</li>
+        <li>feed: The source feed for the data, either "station" or "free_bike"</li>
+        <li>  start: The starting datetime, format: YYYYMMDDHH</li>
+        <li>  end: The ending datetime (inclusive), format: YYYYMMDDHH</li>
+        <li>  frequency: The period in which to group the data. Options are &#39;h&#39; (hours, default), &#39;d&#39; (day), &#39;m&#39; (month), &#39;y&#39; (year).</li>
+        <li>station: The station ID of the station (as specified in the stations endpoint). If no station is provided (default), data for the whole system will be returned. If &#39;all&#39; is provided, data for each station in the system will be returned.</li></ul>
+        <li>vehicle: the vehicle ID of the vehicle (as specified in the vehicles endpoint). If no vehicle is provided (default), data for the whole system will be returned. If &#39;all&#39; is provided, data for each vehicle type in the system will be returned.</li>
+<p><em>Example</em>: <a href="https://api.raccoon.bike/activity?system=mobi_vancouver&amp;start=2021012800&amp;end=2021012900&amp;frequency=m&amp;station=0001">https://api.raccoon.bike/activity?system=mobi_vancouver&amp;start=2021012800&amp;end=2021012900&amp;frequency=m&amp;station=0001</a>  </p>
+
+<h2 id="license">License</h2>
+<p>This software is licensed under the <a href="https://opensource.org/licenses/MIT">MIT license</a>.</p>
+<p>Data provided by the BikeRaccoonAPI is licensed under the <a href="https://creativecommons.org/licenses/by/4.0/">Creative Commons BY 4.0 license</a>. 
+You are free to:</p>
+<ul>
+<li>Share — copy and redistribute the material in any medium or format</li>
+<li>Adapt — remix, transform, and build upon the material
+for any purpose, even commercially.</li>
+</ul>
+<p>You must give appropriate credit, provide a link to the license, and indicate if changes were made. You may do so in any reasonable manner, but not in any way that suggests the licensor endorses you or your use.
+You may not apply legal terms or technological measures that legally restrict others from doing anything the license permits.</p>
