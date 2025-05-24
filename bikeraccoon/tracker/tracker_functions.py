@@ -2,7 +2,7 @@ import pandas as pd
 import json
 import pathlib
 
-from ..gbfs import *
+from bikeraccoon.gbfs import *
 
 
 import logging
