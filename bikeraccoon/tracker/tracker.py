@@ -48,7 +48,7 @@ def update_system_raw(system):
         return
        
     
-    
+    loggers = {name:logging.getLogger(name) for name in logging.root.manager.loggerDict}
     loggers[system['name']].info("querying GBFS info")
     
     
@@ -104,7 +104,7 @@ def update_system(system):
 
     return True
 
-def tracker(systems_file='systems.json',log_path=None,
+def tracker(systems_file='systems.json',log_path=None,data_path='tracker-data',
             update_interval=20, query_interval=20, station_check_hour=4,
             save_temp_data=False):
     
@@ -124,17 +124,17 @@ def tracker(systems_file='systems.json',log_path=None,
     loggers = {}
 
     ## Do an initial station update on startup
-    with open('systems.json') as f:
+    with open(systems_file) as f:
         systems = json.load(f)
 
     for system in systems:
-        
+        system['_data_path'] = data_path
         # setup system-specific logger
         loggers[system['name']] = setup_logger(system['name'], log_path=log_path, log_name=f"{system['name']}.log")
         
         if system['tracking']:
             
-            pathlib.Path(f'./tracker-data/{system['name']}').mkdir(parents=True, exist_ok=True)
+            pathlib.Path(f"{system['_data_path']}/{system['name']}").mkdir(parents=True, exist_ok=True)
             
             update_stations(system)
             update_vehicle_types(system)
@@ -157,8 +157,7 @@ def tracker(systems_file='systems.json',log_path=None,
         logger.info(f"start: {dt.datetime.now()}")
 
         
-        # for system in systems:
-        #     update_system_raw(system) # GBFS query and update raw files
+
         with Pool(4) as p:
             p.map(update_system_raw, systems)
 
@@ -166,13 +165,12 @@ def tracker(systems_file='systems.json',log_path=None,
         if dt.datetime.now() >  last_update + update_delta:
             last_update = dt.datetime.now()
             
-            # for system in systems:
-            #     update_system(system)
+
             with Pool(4) as p:
                 res = p.map(update_system,systems)
                         
             # Update tracking end datetime if update_system completes
-            with open('systems.json','w') as f:
+            with open(systems_file,'w') as f:
                 for b, system in zip(res,systems):
                     if b:
                 

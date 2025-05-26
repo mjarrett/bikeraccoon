@@ -5,7 +5,7 @@ import datetime as dt
 from zoneinfo import ZoneInfo
 import duckdb
 
-from .._version import api_version,tracker_version
+from bikeraccoon._version import api_version,tracker_version
 
 def get_data_path(sys_name,feed_type,vehicle_type,freq):
     vehicle_type = 'all' if vehicle_type is None else vehicle_type

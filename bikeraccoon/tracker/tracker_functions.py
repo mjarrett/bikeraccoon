@@ -2,7 +2,7 @@ import pandas as pd
 import json
 import pathlib
 
-from bikeraccoon.gbfs import *
+from ..gbfs import *
 
 
 import logging
@@ -15,18 +15,21 @@ import duckdb
 #-- Get loggers
 logger = logging.getLogger('Tracker')
 
-with open('systems.json') as f:
-    systems = json.load(f)
+#with open('/home/msj/br-tracker/systems.json') as f:
+#    systems = json.load(f)
 
-loggers = {}
-for system in systems:
-    loggers[system['name']] = logging.getLogger(system['name'])
-    
+#loggers = {}
+#for system in systems:
+#    loggers[system['name']] = logging.getLogger(system['name'])
+#print(logging.root.manager.loggerDict)
+
+
     
 def update_station_status_raw(system):
+    loggers = {name:logging.getLogger(name) for name in logging.root.manager.loggerDict}
     loggers[system['name']].info(f"Updating station bikes")
     # Query stations and save to temp table
-    ddf_file = f"tracker-data/{system['name']}/raw.station.parquet"
+    ddf_file = f"{system['_data_path']}/{system['name']}/raw.station.parquet"
     try:
         ddf = pd.read_parquet(ddf_file)
     except:
@@ -50,8 +53,9 @@ def update_station_status_raw(system):
     ddf.to_parquet(ddf_file,index=False)
     
 def update_free_bike_status_raw(system):
+    loggers = {name:logging.getLogger(name) for name in logging.root.manager.loggerDict}    
     loggers[system['name']].info(f"Updating free bikes")
-    bdf_file = f"tracker-data/{system['name']}/raw.free_bike.parquet"
+    bdf_file = f"{system['_data_path']}/{system['name']}/raw.free_bike.parquet"
     try:
         bdf = pd.read_parquet(bdf_file)
     except:
@@ -85,14 +89,14 @@ def update_trips(system,feed_type,save_temp_data=False):
     Pulls raw data from raw files, computes trips, saves trip data to file
     """
     
-
+    loggers = {name:logging.getLogger(name) for name in logging.root.manager.loggerDict}
     loggers[system['name']].info(f"Updating tables: {feed_type}")
 
     if feed_type == 'station':
         ## Compute hourly station trips, append to trips table
 
         try:
-            ddf = pd.read_parquet(f"tracker-data/{system['name']}/raw.station.parquet")  
+            ddf = pd.read_parquet(f"{system['_data_path']}/{system['name']}/raw.station.parquet")  
             thdf = make_station_trips(ddf)        
         except Exception as e:
             loggers[system['name']].debug(f"Skipping station trips update: {e}")
@@ -103,7 +107,7 @@ def update_trips(system,feed_type,save_temp_data=False):
     elif feed_type == 'free_bike':
         ## Compute hourly free bike trips, append to trips table
         try:
-            bdf = pd.read_parquet(f"tracker-data/{system['name']}/raw.free_bike.parquet")  
+            bdf = pd.read_parquet(f"{system['_data_path']}/{system['name']}/raw.free_bike.parquet")  
             thdf = make_free_bike_trips(bdf)
         except Exception as e:
             loggers[system['name']].debug(f"Skipping free_bike trips update: {e}")
@@ -129,7 +133,7 @@ def update_trips(system,feed_type,save_temp_data=False):
     
     # Drop records in raw tables except for most recent query
     try:
-        trim_raw(f"tracker-data/{system['name']}/raw.{feed_type}.parquet")
+        trim_raw(f"{system['_data_path']}/{system['name']}/raw.{feed_type}.parquet")
     except FileNotFoundError:
         pass
 
@@ -141,13 +145,13 @@ def update_trips(system,feed_type,save_temp_data=False):
 
 
 def load_parquet(system,year_tag,feed_type):
-    outpath=pathlib.Path(f"tracker-data/{system['name']}/")
+    outpath=pathlib.Path(f"{system['_data_path']}/{system['name']}/")
     return pd.read_parquet(f"{outpath}/trips.{feed_type}.hourly.{year_tag}.parquet")
     
     
 def save_to_parquet(system,thdf,feed_type):
     
-    outpath=pathlib.Path(f"tracker-data/{system['name']}/")
+    outpath=pathlib.Path(f"{system['_data_path']}/{system['name']}/")
     outpath.mkdir(parents=True,exist_ok=True)
     
     years = set(thdf['datetime'].dt.year)
@@ -320,12 +324,12 @@ def make_free_bike_trips(bdf):
 #     return df
 
 def check_tracking_start(system):
-    data_file = f"tracker-data/{system['name']}/trips.*.parquet"
-    qry = duckdb.query("""select min(datetime) from read_parquet('tracker-data/bixi_montreal/trips*parquet')""")
+    data_file = f"{system['_data_path']}/{system['name']}/trips.*.parquet"
+    qry = duckdb.query(f"""select min(datetime) from read_parquet('{system['_data_path']}/bixi_montreal/trips*parquet')""")
     return qry.fetchall()[0][0]
 
 def get_vehicle_types(system):
-    vehicles_file = f"tracker-data/{system['name']}/vehicle_types.parquet"
+    vehicles_file = f"{system['_data_path']}/{system['name']}/vehicle_types.parquet"
     try:
         vdf_current = pd.read_parquet(vehicles_file)
         return list(vdf_current['vehicle_type_id'])
@@ -336,11 +340,12 @@ def update_vehicle_types(system):
     """
     Update vehicle types table
     """
+    loggers = {name:logging.getLogger(name) for name in logging.root.manager.loggerDict}
     loggers[system['name']].info(f"Vehicle Types Update")
     
     #-- Load vehicle types file if exists
-    vehicles_file = f"tracker-data/{system['name']}/vehicle_types.parquet"
-    vehicles_file_bak = f"tracker-data/{system['name']}/vehicles_BAK.parquet"
+    vehicles_file = f"{system['_data_path']}/{system['name']}/vehicle_types.parquet"
+    vehicles_file_bak = f"{system['_data_path']}/{system['name']}/vehicles_BAK.parquet"
     try:
         vdf_current = pd.read_parquet(vehicles_file)
     except:
@@ -371,12 +376,13 @@ def update_stations(system):
     Update stations table
     Adds station if doesn't exist, updates active status
     """
+    loggers = {name:logging.getLogger(name) for name in logging.root.manager.loggerDict}
     loggers[system['name']].info(f"Station Update")
     
     
     #-- Load stations file if exists
-    stations_file = f"tracker-data/{system['name']}/stations.parquet"
-    stations_file_bak = f"tracker-data/{system['name']}/stations_BAK.parquet"
+    stations_file = f"{system['_data_path']}/{system['name']}/stations.parquet"
+    stations_file_bak = f"{system['_data_path']}/{system['name']}/stations_BAK.parquet"
     try:
         sdf_current = pd.read_parquet(stations_file)
     except:

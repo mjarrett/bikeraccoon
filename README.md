@@ -1,8 +1,16 @@
 # bikeraccoon
 
-A python package that wraps the [bikeraccoon API](https://github.com/mjarrett/bikeraccoonAPI). `bikeraccoon` is built with Pandas and in most cases returns a Pandas.DataFrame.
+This package contains several modules:
+* A GBFS feed tracker
+* A HTTP API for remote access to tracker data
+* A Python API for native Python access to tracker data
+* A web dashboard for displaying tracker data
 
-## Usage
+## Installation
+
+To install, I recommend cloning this repository and installing via `pip install -e /path/to/bikeraccoon/`. I don't recommending installing directly from git.
+
+## Python API Usage
 
 ```
 import bikeracccoon as br
