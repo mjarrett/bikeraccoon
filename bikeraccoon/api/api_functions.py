@@ -10,11 +10,12 @@ from bikeraccoon._version import api_version,tracker_version
 def get_data_path(sys_name,feed_type,vehicle_type,freq):
     vehicle_type = 'all' if vehicle_type is None else vehicle_type
 
-    if freq == 'h':
+    if freq in ['h','t']:
         return f'./tracker-data/{sys_name}/trips.{feed_type}.hourly.*.parquet'
     elif freq in ['d','m','y']:
         return f'./tracker-data/{sys_name}/trips.{feed_type}.daily.*.parquet'
-
+    
+    
 def api_response(f):
     def api_func(*args,**kwargs):
         start = dt.datetime.now()
@@ -36,10 +37,13 @@ def get_trips(t1,t2,sys_name,feed_type,station_id,vehicle_type_id,frequency):
         select = f"FIRST(datetime),SUM(trips), SUM(returns)"
         groupby = ""
         where = f"datetime BETWEEN '{t1}' and '{t2}'"
+        orderby = ""
     else:
         select = f"date_trunc('{frequency}',datetime),SUM(trips), SUM(returns)"
         groupby = f"date_trunc('{frequency}',datetime)"
         where = f"datetime BETWEEN '{t1}' and '{t2}'"
+        orderby = f"ORDER BY date_trunc('{frequency}',datetime)"
+        
     vehicle_select = "null"
     vehicle_groupby = ""
     vehicle_where = ""
@@ -65,11 +69,13 @@ def get_trips(t1,t2,sys_name,feed_type,station_id,vehicle_type_id,frequency):
     select = ",".join(x for x in [station_select,vehicle_select,select] if x != "")
     where = " AND ".join(x for x in [station_where,vehicle_where,where] if x != "")
     groupby = ",".join(x for x in [station_groupby,vehicle_groupby,groupby] if x != "")
+
     query_text = f'''
            SELECT {select}
            FROM read_parquet('{data_path}')
            WHERE {where}
            {"GROUP BY" if groupby != "" else ""} {groupby}
+           {orderby}
            '''
     print(query_text)
     qry = duckdb.query(query_text)

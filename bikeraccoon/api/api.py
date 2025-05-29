@@ -67,6 +67,7 @@ def get_stations():
 
 
 @app.route('/vehicles',methods=['GET'])
+@api_response
 def get_vehicles():
     sys_name = request.args.get('system', default=None,type=str)
     if sys_name is None:
@@ -75,8 +76,8 @@ def get_vehicles():
     table = pq.read_table(f'./tracker-data/{sys_name}/vehicle_types.parquet')
     res = table.to_pylist()
 
-    print(table)
-    return json_response(res)
+    
+    return res
 
 @app.route('/activity', methods=['GET'])
 def get_activity():
@@ -98,7 +99,7 @@ def get_activity():
         
         return return_api_error()
     
-    print(t1,t2,sys_name,feed_type,station_id,vehicle_type_id,frequency)
+    
     res =  get_trips(t1,t2,sys_name,feed_type,station_id,vehicle_type_id,frequency)  
     return res
     # if station_id is None:      
