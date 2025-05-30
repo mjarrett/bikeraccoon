@@ -103,7 +103,7 @@ def query_station_status(sys_url):
     df = pd.DataFrame(data)
     
     if 'vehicle_type_id' not in df.columns:
-        df['vehicle_type_id'] = None
+        df['vehicle_type_id'] = ""
     
     df = df.drop_duplicates(['station_id','last_reported','vehicle_type_id'])
     try:
@@ -155,14 +155,14 @@ def query_free_bike_status(sys_url):
         df = pd.DataFrame(data[bikes_slug])
 
     if 'vehicle_type_id' not in data['data'][bikes_slug][0]:
-        df['vehicle_type_id'] = None
+        df['vehicle_type_id'] = ""
 
     if 'lat' not in df.columns or 'lon' not in df.columns:
         df['lat'] = 0
         df['lon'] = 0
         
     if 'station_id' not in df.columns:
-        df['station_id'] = None
+        df['station_id'] = ""
 
     
     #df = df.groupby(['station_id','vehicle_type_id']).agg({bike_id_slug:'count'}).reset_index()
