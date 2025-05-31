@@ -45,9 +45,12 @@ def tests():
 @app.route('/systems', methods=['GET'])
 @api_response
 def get_systems():
+    sys_name = request.args.get('system', default=None,type=str)
 
-    res = get_systems_info()
-    
+    if sys_name is None:
+        res = get_systems_info()
+    else:
+        res = get_system_info(sys_name)
     return res
 
 @app.route('/stations', methods=['GET'])

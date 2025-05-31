@@ -2,40 +2,108 @@ import pandas as pd
 import json
 import pathlib
 
-from ..gbfs import *
-
+from .. import gbfs
 
 import logging
+from logging.handlers import TimedRotatingFileHandler
 
 import datetime as dt
+from zoneinfo import ZoneInfo
+from collections import UserDict
 import os
 import sys     
 import duckdb
 
-#-- Get loggers
+#-- Get logger
 logger = logging.getLogger('Tracker')
 
 #with open('/home/msj/br-tracker/systems.json') as f:
 #    systems = json.load(f)
 
-#loggers = {}
-#for system in systems:
-#    loggers[system['name']] = logging.getLogger(system['name'])
-#print(logging.root.manager.loggerDict)
 
+class GBFSSystem(UserDict):
+
+    def set_logger(self,log_path):        
+        
+        # setup system-specific logger
+        self.logger = setup_logger(self['name'], log_path=log_path, log_name=f"{self['name']}.log")
+
+        
+    
+    def check_url(self):
+        """If url is working, keep it. Otherwise check systems.csv"""
+        if 'url' in self.keys() and gbfs.check_gbfs_url(self['url']):
+            return
+        self['url'] = self.get_gbfs_url()
+
+    def get_gbfs_url(self):
+        if 'gbfs_system_id' not in self.keys():
+            return
+        try:
+            df = pd.read_csv('https://raw.githubusercontent.com/MobilityData/gbfs/refs/heads/master/systems.csv')
+            system = df[df['System ID'] == self['gbfs_system_id']].to_dict('records')[0]
+            new_url =  system['Auto-Discovery URL']
+            self.logger.info(f'Setting GBFS source URL: {new_url}')
+            return new_url
+        except Exception as e:
+            print(e)
+            return 
+    
+    def get_system_time(self):
+        return dt.datetime.now(ZoneInfo(self['tz']))
+
+
+    def update_tracking_range(self):
+        if 'tracking_start' not in self.keys():
+            self['tracking_start'] = check_tracking_start(self).strftime('%Y-%m-%d %H:%M:%S')
+            
+        self['tracking_end'] = check_tracking_end(self).strftime('%Y-%m-%d %H:%M:%S')
+
+    def to_parquet(self):
+        path = pathlib.Path(f"{self.data_path}/system.parquet")
+
+        df = pd.DataFrame([self])
+        df.to_parquet(path,index=False)
+
+
+def setup_logger(name, log_path, log_name):
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(name)s - %(message)s')
+    
+    if log_path is not None:
+        log_file = log_path.joinpath(log_name)
+        handler = TimedRotatingFileHandler(log_file,
+                                       when="d",
+                                       interval=1,
+                                       backupCount=5)
+
+        handler.setFormatter(formatter)
+        logger.addHandler(handler)
+    
+    streamhandler = logging.StreamHandler()
+    streamhandler.setFormatter(formatter)
+    logger.addHandler(streamhandler)
+    return logger
+
+def update_system_table(system):
+
+    # Add anything here you want updated reqularly
+    system.update_tracking_range()    
+    system.to_parquet()
 
     
+    
 def update_station_status_raw(system):
-    loggers = {name:logging.getLogger(name) for name in logging.root.manager.loggerDict}
-    loggers[system['name']].info(f"Updating station bikes")
+    system.logger.info(f"Updating station bikes")
     # Query stations and save to temp table
-    ddf_file = f"{system['_data_path']}/{system['name']}/raw.station.parquet"
+    ddf_file = f"{system.data_path}/raw.station.parquet"
     try:
         ddf = pd.read_parquet(ddf_file)
     except:
         ddf = None
     try:
-        ddf_query = query_station_status(system['url'])
+        ddf_query = gbfs.query_station_status(system['url'])
         ddf_query['datetime'] = ddf_query['datetime'].dt.tz_convert(system['tz'])
         # ddf_query['station_id'] = ddf_query['station_id'].astype(str)
         
@@ -47,41 +115,31 @@ def update_station_status_raw(system):
         
         
     except Exception as e:
-        loggers[system['name']].debug(f"gbfs query error, skipping stations_raw db update: {e}")
+        system.logger.debug(f"gbfs query error, skipping stations_raw db update: {e}")
         return 
         
     ddf.to_parquet(ddf_file,index=False)
     
 def update_free_bike_status_raw(system):
-    loggers = {name:logging.getLogger(name) for name in logging.root.manager.loggerDict}    
-    loggers[system['name']].info(f"Updating free bikes")
-    bdf_file = f"{system['_data_path']}/{system['name']}/raw.free_bike.parquet"
+    system.logger.info(f"Updating free bikes")
+    bdf_file = f"{system.data_path}/raw.free_bike.parquet"
     try:
         bdf = pd.read_parquet(bdf_file)
     except:
         bdf = None
     try:
-        bdf_query = query_free_bike_status(system['url'])
+        bdf_query = gbfs.query_free_bike_status(system['url'])
         bdf_query['datetime'] = bdf_query['datetime'].dt.tz_convert(system['tz'])
         bdf = pd.concat([bdf,bdf_query])
         
     except Exception as e:
-        loggers[system['name']].debug(f"gbfs query error, skipping free_bikes_raw db update: {e}")
+        system.logger.debug(f"gbfs query error, skipping free_bikes_raw db update: {e}")
         return 
 
 
     bdf.to_parquet(bdf_file,index=False)
 
-def map_station_id_to_station(station_id,system,session):
-    """
-    Given a station_id string and a system obj, return a station ORM object
-    with the latest 'created_by' date for that station_id and system
-    """
-    
-    qry = session.query(Station).join(System).filter(System.name==system.name)
-    qry = qry.filter(Station.station_id==station_id).order_by(Station.created_date.desc())
-    
-    return qry.first()
+
     
 def update_trips(system,feed_type,save_temp_data=False):
     
@@ -89,17 +147,16 @@ def update_trips(system,feed_type,save_temp_data=False):
     Pulls raw data from raw files, computes trips, saves trip data to file
     """
     
-    loggers = {name:logging.getLogger(name) for name in logging.root.manager.loggerDict}
-    loggers[system['name']].info(f"Updating tables: {feed_type}")
+    system.logger.info(f"Updating tables: {feed_type}")
 
     if feed_type == 'station':
         ## Compute hourly station trips, append to trips table
 
         try:
-            ddf = pd.read_parquet(f"{system['_data_path']}/{system['name']}/raw.station.parquet")  
+            ddf = pd.read_parquet(f"{system.data_path}/raw.station.parquet")  
             thdf = make_station_trips(ddf)        
         except Exception as e:
-            loggers[system['name']].debug(f"Skipping station trips update: {e}")
+            system.logger.debug(f"Skipping station trips update: {e}")
             return 
             
             
@@ -107,10 +164,10 @@ def update_trips(system,feed_type,save_temp_data=False):
     elif feed_type == 'free_bike':
         ## Compute hourly free bike trips, append to trips table
         try:
-            bdf = pd.read_parquet(f"{system['_data_path']}/{system['name']}/raw.free_bike.parquet")  
+            bdf = pd.read_parquet(f"{system.data_path}/raw.free_bike.parquet")  
             thdf = make_free_bike_trips(bdf)
         except Exception as e:
-            loggers[system['name']].debug(f"Skipping free_bike trips update: {e}")
+            system.logger.debug(f"Skipping free_bike trips update: {e}")
             return
 
  
@@ -133,7 +190,7 @@ def update_trips(system,feed_type,save_temp_data=False):
     
     # Drop records in raw tables except for most recent query
     try:
-        trim_raw(f"{system['_data_path']}/{system['name']}/raw.{feed_type}.parquet")
+        trim_raw(f"{system.data_path}/raw.{feed_type}.parquet")
     except FileNotFoundError:
         pass
 
@@ -145,13 +202,13 @@ def update_trips(system,feed_type,save_temp_data=False):
 
 
 def load_parquet(system,year_tag,feed_type):
-    outpath=pathlib.Path(f"{system['_data_path']}/{system['name']}/")
+    outpath=pathlib.Path(f"{system.data_path}/")
     return pd.read_parquet(f"{outpath}/trips.{feed_type}.hourly.{year_tag}.parquet")
     
     
 def save_to_parquet(system,thdf,feed_type):
     
-    outpath=pathlib.Path(f"{system['_data_path']}/{system['name']}/")
+    outpath=pathlib.Path(f"{system.data_path}/")
     outpath.mkdir(parents=True,exist_ok=True)
     
     years = set(thdf['datetime'].dt.year)
@@ -324,12 +381,17 @@ def make_free_bike_trips(bdf):
 #     return df
 
 def check_tracking_start(system):
-    data_file = f"{system['_data_path']}/{system['name']}/trips.*.parquet"
-    qry = duckdb.query(f"""select min(datetime) from read_parquet('{system['_data_path']}/bixi_montreal/trips*parquet')""")
+    data_file = f"{system.data_path}/trips.*.hourly.*.parquet"
+    qry = duckdb.query(f"""select min(datetime) from read_parquet('{data_file}')""")
+    return qry.fetchall()[0][0]
+
+def check_tracking_end(system):
+    data_file = f"{system.data_path}/trips.*.hourly.*.parquet"
+    qry = duckdb.query(f"""select max(datetime) from read_parquet('{data_file}')""")
     return qry.fetchall()[0][0]
 
 def get_vehicle_types(system):
-    vehicles_file = f"{system['_data_path']}/{system['name']}/vehicle_types.parquet"
+    vehicles_file = f"{system.data_path}/vehicle_types.parquet"
     try:
         vdf_current = pd.read_parquet(vehicles_file)
         return list(vdf_current['vehicle_type_id'])
@@ -340,12 +402,11 @@ def update_vehicle_types(system):
     """
     Update vehicle types table
     """
-    loggers = {name:logging.getLogger(name) for name in logging.root.manager.loggerDict}
-    loggers[system['name']].info(f"Vehicle Types Update")
+    system.logger.info(f"Vehicle Types Update")
     
     #-- Load vehicle types file if exists
-    vehicles_file = f"{system['_data_path']}/{system['name']}/vehicle_types.parquet"
-    vehicles_file_bak = f"{system['_data_path']}/{system['name']}/vehicles_BAK.parquet"
+    vehicles_file = f"{system.data_path}/vehicle_types.parquet"
+    vehicles_file_bak = f"{system.data_path}/vehicles_BAK.parquet"
     try:
         vdf_current = pd.read_parquet(vehicles_file)
     except:
@@ -353,10 +414,10 @@ def update_vehicle_types(system):
 
     #-- Query stations
     try:
-        vdf = query_vehicle_types(system['url'])
+        vdf = gbfs.query_vehicle_types(system['url'])
     except Exception as e:
-        loggers[system['name']].info(f"Unable to load vehicle types")
-        loggers[system['name']].debug(f"{e}")
+        system.logger.info(f"Unable to load vehicle types")
+        system.logger.debug(f"{e}")
         return        
     
     
@@ -368,7 +429,7 @@ def update_vehicle_types(system):
         pass
     vdf.to_parquet(vehicles_file,index=False)
     
-    loggers[system['name']].info(f"Vehicle Type Update Complete")
+    system.logger.info(f"Vehicle Type Update Complete")
     
     
 def update_stations(system):
@@ -376,13 +437,12 @@ def update_stations(system):
     Update stations table
     Adds station if doesn't exist, updates active status
     """
-    loggers = {name:logging.getLogger(name) for name in logging.root.manager.loggerDict}
-    loggers[system['name']].info(f"Station Update")
+    system.logger.info(f"Station Update")
     
     
     #-- Load stations file if exists
-    stations_file = f"{system['_data_path']}/{system['name']}/stations.parquet"
-    stations_file_bak = f"{system['_data_path']}/{system['name']}/stations_BAK.parquet"
+    stations_file = f"{system.data_path}/stations.parquet"
+    stations_file_bak = f"{system.data_path}/stations_BAK.parquet"
     try:
         sdf_current = pd.read_parquet(stations_file)
     except:
@@ -390,16 +450,17 @@ def update_stations(system):
 
     #-- Query stations
     try:
-        sdf = query_station_info(system['url'])
+        
+        sdf = gbfs.query_station_info(system['url'])
     except Exception as e:
-        loggers[system['name']].debug(f"Failed to load stations: {e}")
+        system.logger.debug(f"Failed to load stations: {e}")
         return 
     
     #-- Query station status
     try:
-        ddf = query_station_status(system['url'])
+        ddf = gbfs.query_station_status(system['url'])
     except Exception as e:
-        loggers[system['name']].debug(f"Failed to load station status: {e}")
+        system.logger.debug(f"Failed to load station status: {e}")
         return 
     
     
@@ -425,7 +486,7 @@ def update_stations(system):
         pass
     sdf.to_parquet(stations_file,index=False)
     
-    loggers[system['name']].info(f"Station Update Complete")
+    system.logger.info(f"Station Update Complete")
     
     
         

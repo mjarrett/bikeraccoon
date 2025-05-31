@@ -138,12 +138,11 @@ def return_api_error():
     content = "Invalid API request :("
     return content, 400
 
+
 def get_systems_info():
-    with open('systems.json') as f:
-        res = json.load(f)
-    return res
+    qry = duckdb.query(f"select * from './tracker-data/*/system.parquet' ")
+    return qry.fetchdf().to_dict('records')
 
 def get_system_info(sys_name):
-    with open('systems.json') as f:
-        res = json.load(f)
-    return [x for x in res if x['name'] == sys_name][0]
+    qry = duckdb.query(f"select * from './tracker-data/{sys_name}/system.parquet' ")
+    return qry.fetchdf().to_dict('records')[0]

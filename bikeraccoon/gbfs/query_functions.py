@@ -7,6 +7,14 @@ import ssl
 from time import sleep
 
 
+def check_gbfs_url(sys_url):
+    try:
+        requests.get(sys_url).json()['data']
+        return True
+    except:
+        return False
+
+
 def get_station_status_url(sys_url):
     data = requests.get(sys_url).json()
     return [x for x in data['data']['en']['feeds'] if x['name']=='station_status'][0]['url']      
