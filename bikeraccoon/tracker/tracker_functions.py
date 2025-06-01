@@ -55,14 +55,15 @@ class GBFSSystem(UserDict):
     def update_tracking_range(self):
         if 'tracking_start' not in self.keys():
             try:
-                self['tracking_start'] = check_tracking_start(self).strftime('%Y-%m-%d %H:%M:%S')
+                self['tracking_start'] = check_tracking_start(self)
             except:
                 self['tracking_start'] = None
 
         try:
-            self['tracking_end'] = check_tracking_end(self).strftime('%Y-%m-%d %H:%M:%S')
+            self['tracking_end'] = check_tracking_end(self)
         except:
             self['tracking_end'] = None
+            
     def to_parquet(self):
         path = pathlib.Path(f"{self.data_path}/system.parquet")
         path.parent.mkdir(parents=True, exist_ok=True)
