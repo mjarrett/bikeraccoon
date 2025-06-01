@@ -5,7 +5,7 @@ import datetime as dt
 from zoneinfo import ZoneInfo
 import duckdb
 
-from bikeraccoon._version import api_version,tracker_version
+from bikeraccoon._version import version
 
 def get_data_path(sys_name,feed_type,vehicle_type,freq):
     vehicle_type = 'all' if vehicle_type is None else vehicle_type
@@ -22,7 +22,7 @@ def api_response(f):
         res = f(*args,**kwargs)
         t = dt.datetime.now() - start
         res =   {'data':res, 'query_time':t, 
-                 'api_version':api_version, 'tracker_version':tracker_version}
+                 'version':version}
         return json_response(res)
     api_func.__name__ = f.__name__
     return api_func
