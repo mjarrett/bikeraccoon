@@ -54,13 +54,18 @@ class GBFSSystem(UserDict):
 
     def update_tracking_range(self):
         if 'tracking_start' not in self.keys():
-            self['tracking_start'] = check_tracking_start(self).strftime('%Y-%m-%d %H:%M:%S')
-            
-        self['tracking_end'] = check_tracking_end(self).strftime('%Y-%m-%d %H:%M:%S')
+            try:
+                self['tracking_start'] = check_tracking_start(self).strftime('%Y-%m-%d %H:%M:%S')
+            except:
+                self['tracking_start'] = None
 
+        try:
+            self['tracking_end'] = check_tracking_end(self).strftime('%Y-%m-%d %H:%M:%S')
+        except:
+            self['tracking_end'] = None
     def to_parquet(self):
         path = pathlib.Path(f"{self.data_path}/system.parquet")
-
+        path.parent.mkdir(parents=True, exist_ok=True)
         df = pd.DataFrame([self])
         df.to_parquet(path,index=False)
 
@@ -311,14 +316,22 @@ def make_free_bike_trips(bdf):
 
 
 def check_tracking_start(system):
-    data_file = f"{system.data_path}/trips.*.hourly.*.parquet"
-    qry = duckdb.query(f"""select min(datetime) from read_parquet('{data_file}')""")
-    return qry.fetchall()[0][0]
+    
+    try:
+        data_file = f"{system.data_path}/trips.*.hourly.*.parquet"
+        qry = duckdb.query(f"""select min(datetime) from read_parquet('{data_file}')""")
+        return qry.fetchall()[0][0]
+    except:
+        return  None
 
 def check_tracking_end(system):
-    data_file = f"{system.data_path}/trips.*.hourly.*.parquet"
-    qry = duckdb.query(f"""select max(datetime) from read_parquet('{data_file}')""")
-    return qry.fetchall()[0][0]
+    try:
+        data_file = f"{system.data_path}/trips.*.hourly.*.parquet"
+        qry = duckdb.query(f"""select max(datetime) from read_parquet('{data_file}')""")
+        return qry.fetchall()[0][0]
+    except:
+        return None
+
 
 def get_vehicle_types(system):
     vehicles_file = f"{system.data_path}/vehicle_types.parquet"
