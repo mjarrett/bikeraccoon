@@ -17,8 +17,7 @@ import duckdb
 #-- Get logger
 logger = logging.getLogger('Tracker')
 
-#with open('/home/msj/br-tracker/systems.json') as f:
-#    systems = json.load(f)
+
 
 
 class GBFSSystem(UserDict):
@@ -256,7 +255,6 @@ def make_station_trips(ddf):
         df[col] = pdf[col] - pdf[col].shift(-1)
     df = df.fillna(0.0).astype(int)
     
-    #df_stack = df.stack(level=0).reset_index()
     df_stack = df.stack(future_stack=True).stack(future_stack=True).reset_index()
     df_stack.columns = ['datetime','vehicle_type_id','station_id','trips']
 
@@ -267,13 +265,7 @@ def make_station_trips(ddf):
     df_stack['trips'] = -1*df_stack['trips']
 
     df_stack = df_stack.set_index('datetime').groupby([pd.Grouper(freq='h'),'station_id','vehicle_type_id'],dropna=False).sum().reset_index()
-    
-    # Add available bikes and docks
-    # num_bikes_xw = ddf.groupby('station_id').max()['num_bikes_available'].to_dict()
-    # num_docks_xw = ddf.groupby('station_id').max()['num_docks_available'].to_dict()
 
-    # df_stack['num_bikes_available'] = df_stack['station_id'].map(num_bikes_xw)
-    # df_stack['num_docks_available'] = df_stack['station_id'].map(num_docks_xw)
     
     return df_stack
 
@@ -287,11 +279,7 @@ def make_free_bike_trips(bdf):
     if len(bdf) == 0:
         return pd.DataFrame()
     
-    #bdf = bdf.drop_duplicates(['station_id','vehicle_id','datetime','lat','lon']) # resolves issue where bikes are double counted
-    
-    # ddf = bdf.groupby(['datetime','station_id','lat','lon','vehicle_type_id'],dropna=False)['vehicle_id'].count()
-    # ddf = ddf.reset_index()
-    # ddf = ddf.rename(columns={'vehicle_id':'num_bikes_available'})
+
     bdf['latlon'] = list(zip(bdf['lat'],bdf['lon']))
     pivot_col = 'latlon' if len(set(bdf['latlon'])) > len(set(bdf['station_id'].fillna(0))) else 'station_id'
     
@@ -314,71 +302,13 @@ def make_free_bike_trips(bdf):
     df_stack.loc[df_stack['trips']>0,'trips'] = 0
     df_stack['trips'] = -1*df_stack['trips']
     
-    # if pivot_col == 'latlon':
-    #     df_stack['station_id'] = None
-    #     num_bikes_xw = bdf.groupby('station_id',dropna=False).agg({'num_bikes_available':'sum'}).to_dict()
-    # else:
-    #     num_bikes_xw = bdf.groupby('station_id',dropna=False).agg({'num_bikes_available':'max'}).to_dict()
+
     
     df_stack = df_stack.set_index('datetime').groupby([pd.Grouper(freq='h'),'station_id','vehicle_type_id'],dropna=False).sum().reset_index()
-    # 
-    # # Add available bikes and docks
-    # num_bikes_xw = ddf.groupby('station_id',dropna=False).max()['num_bikes_available'].to_dict()
 
-    # df_stack['num_bikes_available'] = df_stack['station_id'].map(num_bikes_xw)
-    # df_stack['num_docks_available'] = 0
-    
     return df_stack
 
-# def make_free_bike_trips_old(bdf):
-#     if len(bdf) == 0:
-#         return pd.DataFrame()
-    
 
-#     n_bikes = 0
-#     bikes = {} # set of bike_ids at each datetime
-#     for t,df in bdf.groupby(['datetime','station_id'],dropna=False):
-#         active_bikes = set([(vid,lat,lon) for vid,lat,lon in df[['vehicle_id','lat','lon']].itertuples(index=False)])
-#         bikes[t] = active_bikes
-#         n_bikes = n_bikes if len(active_bikes) < n_bikes else len(active_bikes)
-        
-#     t = {}
-    
-
-    
-#     timestamps = sorted(set([x for x,y in bikes.keys()]))
-#     station_ids = sorted(set([y for x,y in bikes.keys()]))
-#     df = pd.DataFrame()
-    
-#     for station_id in station_ids:
-#         for i,ts in enumerate(timestamps):
-#             print(station_id,ts)
-#             if i==len(timestamps)-1:
-#                 continue
-            
-#             if station_id != '0001':
-#                 sys.exit()
-#             print("Bikes at timepoint: ", bikes[(ts,station_id)])
-#             print("Bikes at timepoint + 1", bikes[(timestamps[i+1],station_id)])
-#             trips_started = len(bikes[(ts,station_id)].difference(bikes[(timestamps[i+1],station_id)]))
-#             trips_ended = len(bikes[(timestamps[i+1],station_id)].difference(bikes[(ts,station_id)]))
-
-#             t[i] = {'trips':trips_started,'returns':trips_ended,
-#                     'datetime':ts,'station_id':station_id,
-#                     'num_bikes_available':n_bikes,
-#                    'num_docks_available':None}
-
-    
-#         sdf = pd.DataFrame(t).T
-#         sdf = sdf.set_index('datetime')
-#         sdf.index = pd.to_datetime(sdf.index)
-#         df = pd.concat([df,sdf])
-#         print(df)
-#     df = df.groupby([pd.Grouper(freq='h'),'station_id'],dropna=False).sum()
-      
-#     df = df.reset_index()
-    
-#     return df
 
 def check_tracking_start(system):
     data_file = f"{system.data_path}/trips.*.hourly.*.parquet"
@@ -452,6 +382,7 @@ def update_stations(system):
     try:
         
         sdf = gbfs.query_station_info(system['url'])
+        sdf['active'] = True
     except Exception as e:
         system.logger.debug(f"Failed to load stations: {e}")
         return 
