@@ -74,7 +74,7 @@ def update_system(system):
         system.logger.info(f"updating stations")
         update_stations(system)
         update_vehicle_types(system)
-    
+        update_system_table(system)
     
     return True
 
@@ -144,8 +144,7 @@ def tracker(systems_file='systems.json',log_path=None,data_path='tracker-data',
             with Pool(4) as p:
                 res = p.map(update_system,systems)
                         
-            # Update tracking end datetime if update_system completes
-            update_system_table(system)        
+                    
         
         
         logger.info(f"end: {dt.datetime.now()}")

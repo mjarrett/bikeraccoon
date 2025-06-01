@@ -63,6 +63,8 @@ class GBFSSystem(UserDict):
             self['tracking_end'] = check_tracking_end(self)
         except:
             self['tracking_end'] = None
+
+        self['latest_query'] = self.get_system_time()
             
     def to_parquet(self):
         path = pathlib.Path(f"{self.data_path}/system.parquet")
