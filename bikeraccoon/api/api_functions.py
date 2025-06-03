@@ -19,7 +19,10 @@ def get_data_path(sys_name,feed_type,vehicle_type,freq):
 def api_response(f):
     def api_func(*args,**kwargs):
         start = dt.datetime.now()
-        res = f(*args,**kwargs)
+        try:
+            res = f(*args,**kwargs)
+        except Exception as e:
+            return return_api_error(e)
         t = dt.datetime.now() - start
         res =   {'data':res, 'query_time':t, 
                  'version':version}
@@ -83,37 +86,12 @@ def get_trips(t1,t2,sys_name,feed_type,station_id,vehicle_type_id,frequency):
         #-- Convert to dict
     res = [{k:v for k,v in zip(['station_id','vehicle_type_id','datetime','trips','returns'],x)} for x in qry.fetchall()]
     
-    #res = {'result':res,'query_time':dt.datetime.now()-start,'query_text':query_text}
 
     return  res
        
     
     
-    
-# def get_system_trips(t1,t2, sys_name, feed_type,vehicle_type,frequency):
-    
-#     data_path = get_data_path(sys_name,feed_type,vehicle_type)
-    
-#     if frequency == 't':
-#         qry = duckdb.query(f'''
-#            SELECT FIRST(datetime),SUM(trips), SUM(returns)
-#            FROM read_parquet('{data_path}')
-#            WHERE datetime BETWEEN '{t1}' and '{t2}'
-#        ''')
-#     else:
-#         qry = duckdb.query(f'''
-#            SELECT date_trunc('{frequency}',datetime),SUM(trips), SUM(returns)
-#            FROM read_parquet('{data_path}')
-#            WHERE datetime BETWEEN '{t1}' and '{t2}'
-#            GROUP BY date_trunc('{frequency}',datetime)
-#            ''')
-#     print(qry.fetchall())
-#     #-- Convert to dict
-#     qry = [{k:v for k,v in zip(['datetime','trips','returns'],x)} for x in qry.fetchall()]
-    
 
-
-#     return  json_response(qry)
 
 def string_to_datetime(t,tz):
     y = int(t[:4])
@@ -133,9 +111,9 @@ def json_response(r):
 
 
     
-def return_api_error():
+def return_api_error(text=""):
 
-    content = "Invalid API request :("
+    content = f"Invalid API request :( \n{text}"
     return content, 400
 
 
