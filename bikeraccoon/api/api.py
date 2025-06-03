@@ -10,12 +10,12 @@ import pytz
 import datetime as dt
 import itertools
 import os
-
+import requests
 import pyarrow.parquet as pq
 
 from .api_functions import *
 
-
+from .. import gbfs
 
 
 app = Flask(__name__,template_folder='../templates/')
@@ -105,18 +105,19 @@ def get_activity():
     
     res =  get_trips(t1,t2,sys_name,feed_type,station_id,vehicle_type_id,frequency)  
     return res
-    # if station_id is None:      
-    #     return get_system_trips(t1,t2, sys_name, feed_type,vehicle_type_id,frequency)
-  
-    # elif station_id == 'all':
-    #     return get_all_stations_trips(t1,t2,sys_name,feed_type,vehicle_type_id,frequency)
-    
-    # else:
-    #     return get_station_trips(t1,t2,sys_name,feed_type,station_id,vehicle_type_id,frequency)
 
-    
-    return return_api_error()
 
+@app.route('/gbfs',methods=['GET'])
+def get_live_gbfs():
+    sys_name = request.args.get('system', default=None,type=str)
+    feed = request.args.get('feed', default=None,type=str)
+    table = pq.read_table(f'./tracker-data/{sys_name}/system.parquet')
+    sys_url = table.to_pylist()[0]['url']
+    feed_url = [x for x in requests.get(sys_url).json()['data']['en']['feeds'] if x['name']==feed][0]['url']   
+
+    data = requests.get(feed_url).json()
+    print(data)
+    return json_response(data)
 
     
 if __name__ == '__main__':
