@@ -1,11 +1,14 @@
-from flask import Flask, request, make_response, send_from_directory
-
+from flask import Flask, request, make_response, send_from_directory, jsonify
+from flask.json.provider import DefaultJSONProvider
 import json
 import datetime as dt
 from zoneinfo import ZoneInfo
 import duckdb
 
 from bikeraccoon._version import version
+
+
+
 
 def get_data_path(sys_name,feed_type,vehicle_type,freq):
     vehicle_type = 'all' if vehicle_type is None else vehicle_type
@@ -24,7 +27,7 @@ def api_response(f):
         except Exception as e:
             return return_api_error(e)
         t = dt.datetime.now() - start
-        res =   {'data':res, 'query_time':t, 
+        res =   {'data':res, 'query_time':str(t), 
                  'version':version}
         return json_response(res)
     api_func.__name__ = f.__name__
@@ -103,11 +106,11 @@ def string_to_datetime(t,tz):
 
 
 def json_response(r):
-    r = make_response(json.dumps(r, default=str, indent=4))
-    r.mimetype = "text/plain"
+    #r = make_response(json.dumps(r, default=str, indent=4))
+    #r.mimetype = "text/plain"
+    r = jsonify(r)
     return r
     
-    res.mimetype = "text/plain"
 
 
     
