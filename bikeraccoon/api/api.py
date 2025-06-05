@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 
 from flask_cors import CORS
-from flask import Flask, request, make_response, send_from_directory,render_template
+from flask import (Flask, request, make_response, 
+                    send_from_directory,render_template,jsonify)
 
 import json
 import hashlib
@@ -19,6 +20,8 @@ from .. import gbfs
 
 
 app = Flask(__name__,template_folder='../templates/')
+app.json_provider_class = BRJSONProvider 
+app.json = BRJSONProvider(app)
 CORS(app) #Prevents CORS errors 
 
 
@@ -116,8 +119,7 @@ def get_live_gbfs():
     feed_url = [x for x in requests.get(sys_url).json()['data']['en']['feeds'] if x['name']==feed][0]['url']   
 
     data = requests.get(feed_url).json()
-    print(data)
-    return json_response(data)
+    return jsonify(data)
 
     
 if __name__ == '__main__':

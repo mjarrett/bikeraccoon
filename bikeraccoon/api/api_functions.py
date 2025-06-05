@@ -7,8 +7,18 @@ import duckdb
 
 from bikeraccoon._version import version
 
+class BRJSONProvider(DefaultJSONProvider):
+    """
+    By default Flask jsonify outputs datetimes as GMT. 
+    This overrides and outputs as TZ aware datetime strings.
+    """
+    def default(self, obj):
+        if isinstance(obj, dt.datetime):
+            return obj.isoformat()  # Customize JSON representation
+        return super().default(obj)
 
-
+def get_system_tz(sys_name):
+    return duckdb.query(f'''select tz from './tracker-data/{sys_name}/system.parquet' ''').fetchall()[0][0]
 
 def get_data_path(sys_name,feed_type,vehicle_type,freq):
     vehicle_type = 'all' if vehicle_type is None else vehicle_type
@@ -29,7 +39,7 @@ def api_response(f):
         t = dt.datetime.now() - start
         res =   {'data':res, 'query_time':str(t), 
                  'version':version}
-        return json_response(res)
+        return jsonify(res)
     api_func.__name__ = f.__name__
     return api_func
 
@@ -76,7 +86,10 @@ def get_trips(t1,t2,sys_name,feed_type,station_id,vehicle_type_id,frequency):
     where = " AND ".join(x for x in [station_where,vehicle_where,where] if x != "")
     groupby = ",".join(x for x in [station_groupby,vehicle_groupby,groupby] if x != "")
 
+    tz = get_system_tz(sys_name)
+    
     query_text = f'''
+           SET TIMEZONE='{tz}';
            SELECT {select}
            FROM read_parquet('{data_path}')
            WHERE {where}
@@ -105,14 +118,6 @@ def string_to_datetime(t,tz):
 
 
 
-def json_response(r):
-    #r = make_response(json.dumps(r, default=str, indent=4))
-    #r.mimetype = "text/plain"
-    r = jsonify(r)
-    return r
-    
-
-
     
 def return_api_error(text=""):
 
@@ -125,5 +130,6 @@ def get_systems_info():
     return qry.fetchdf().to_dict('records')
 
 def get_system_info(sys_name):
-    qry = duckdb.query(f"select * from './tracker-data/{sys_name}/system.parquet' ")
+    tz = get_system_tz(sys_name)
+    qry = duckdb.query(f"set timezone='{tz}'; select * from './tracker-data/{sys_name}/system.parquet' ")
     return qry.fetchdf().to_dict('records')[0]
