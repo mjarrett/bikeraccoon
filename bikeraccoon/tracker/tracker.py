@@ -10,14 +10,6 @@ from .tracker_functions import *
 
 
 
-
-
-
-
-
-
-
-
 def update_system_raw(system):
     if not system['tracking']:
         return
@@ -74,7 +66,8 @@ def update_system(system):
         system.logger.info(f"updating stations")
         update_stations(system)
         update_vehicle_types(system)
-        update_system_table(system)
+        
+    update_system_table(system)
     
     return True
 

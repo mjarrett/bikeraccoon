@@ -20,10 +20,12 @@ from .. import gbfs
 
 
 app = Flask(__name__,template_folder='../templates/')
+
 app.json_provider_class = BRJSONProvider 
 app.json = BRJSONProvider(app)
-CORS(app) #Prevents CORS errors 
+app.json.compact = False
 
+CORS(app) #Prevents CORS errors 
 
 
 

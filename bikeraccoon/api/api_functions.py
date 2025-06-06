@@ -1,8 +1,11 @@
 from flask import Flask, request, make_response, send_from_directory, jsonify
 from flask.json.provider import DefaultJSONProvider
+
 import json
 import datetime as dt
 from zoneinfo import ZoneInfo
+import pathlib
+
 import duckdb
 
 from bikeraccoon._version import version
@@ -126,8 +129,16 @@ def return_api_error(text=""):
 
 
 def get_systems_info():
-    qry = duckdb.query(f"select * from './tracker-data/*/system.parquet' ")
-    return qry.fetchdf().to_dict('records')
+    datapath = pathlib.Path('./tracker-data/')
+    
+    res = []
+    for sys_name in [x.name for x in datapath.glob('*')]:
+        try:
+            res.append(get_system_info(sys_name))
+        except:
+            pass
+    # qry = duckdb.query(f"select * from './tracker-data/*/system.parquet' ")
+    return res
 
 def get_system_info(sys_name):
     tz = get_system_tz(sys_name)
