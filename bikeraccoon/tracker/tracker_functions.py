@@ -415,16 +415,17 @@ def update_stations(system):
     #-- Add any legacy stations that aren't in current station query
     if sdf_current is not None:
 
-        legacy_stations_df = sdf_current[~sdf_current['station_id'].isin(sdf['station_id'])]
+        legacy_stations_df = sdf_current[~sdf_current['station_id'].isin(sdf['station_id'])].copy()
         if len(legacy_stations_df) > 0:
-            legacy_stations_df.loc[:,'active'] = False
+            legacy_stations_df['active'] = False
         sdf = pd.concat([sdf,legacy_stations_df])
     
 
     
 
     #-- Run through station status data to label disabled stations
-    sdf[sdf['station_id'].isin(ddf['is_renting']==0)]['active'] = False
+    disabled_ids = ddf.loc[ddf['is_renting']==0, 'station_id']
+    sdf.loc[sdf['station_id'].isin(disabled_ids), 'active'] = False
     
     
     #-- Save stations file
