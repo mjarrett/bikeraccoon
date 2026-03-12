@@ -1,59 +1,325 @@
-<h1 id="bikeraccoonapi">bikeraccoonAPI</h1>
-<p>This is the source code for both the GBFS tracking app and API server hosted at <a href="https://api.raccoon.bike">api.raccoon.bike</a></p>
-<h2 id="gbfs-tracker">GBFS Tracker</h2>
-<p>Many bike share systems worldwide provide real-time access to system information via the GBFS specification. For more information about GBFS, see <a href="https://github.com/NABSA/gbfs">the GBFS github repo</a>. GBFS provides the number of bikes and docks at each station and the number of available floating bikes, but it does <em>not</em> provide trip information. By monitoring the number of available bikes in a system and tracking changes over time this tool estimates the number of trips in a system each hour. For a more detailed explanation of how a previous implementation of this tool works, see <a href="https://notes.mikejarrett.ca/tracking-bikeshare-use-using-gbfs-feeds/">this blog post</a>. </p>
-<p>It&#39;s important to keep in mind that the trip counts infered by this tracker are estimates only and may vary substantially from official counts.</p>
-<h2 id="bike-raccoon-api">Bike Raccoon API</h2>
-<h3>New in version 2.0</h3>
-<h4>Change in API resonse</h4>
-<p></p>The main response is now nested under the 'data' attribute. This allows us to also provide some metadata in the response, such as query time and versioning information.<p></p>
-<h4>Improved handling of <i>free_bikes</i> feed</h4>
-<p>The original version queried both <i>station_status.json</i> and <i>free_bikes.json</i> and saved free bike trips by creating a "station" called "free_bikes". This does not accurately represent how GBFS feeds work in theory or practice. The station_status and free_bike feeds can be independant or overlapping in different situations.</p>
-<p>Now we treat the station_status and free_bikes feeds independently and require the user to specify "station" or "free_bike" <i>feed</i> parameter the when querying system activity. We leave to the user to determine whether it's appropriate to combine both feeds when computing total trips in a system.</p>
-<p><i>In GBFS v3.0 the free_bike_status.json feed is rename vehicle_status.json</i></p>
-<h4>Vehicle Types</h4>
-<p>We are now tracking vehicle types when available, in both station_status and free_bike_status feeds. Specify the <i>vehicle</i> parameter with the relevant vehicle_id to filter trips by vehicle type.</p>
-<p>Vehicle types for each system can be accessed via the "vehicle" endpoint</p>
-<h3>Endpoints</h3>
-<p>To access the data collected by the tracker, we provide the following HTTP endpoints. All endpoints return JSON text.</p>
-<ul>
-<li><p><strong>systems</strong></p>
-<p>Returns a list of systems being tracked along with some system metadata.</p>
-<p><em>Example</em>: <a href="https://api.raccoon.bike/systems">https://api.raccoon.bike/systems</a></p>
-</li>
-<li><p><strong>stations</strong></p>
-<p>Returns a list of stations for a given system along with station metadata.</p>
-<p><em>Parameters</em>: 
-  system: the system name (as specified in the systems endpoint)</p>
-<p><em>Example</em>: <a href="https://api.raccoon.bike/stations?system=bike_share_toronto">https://api.raccoon.bike/stations?system=bike_share_toronto</a></p>
-</li>
-<li><p><strong>vehicles</strong></p>
-<p>Returns a list of vehicle types for a given system.</p>
-<p><em>Parameters</em>: 
-  system: the system name (as specified in the systems endpoint)</p>
-<p><em>Example</em>: <a href="https://api.raccoon.bike/vehicles?system=bike_share_toronto">https://api.raccoon.bike/stations?system=bike_share_toronto</a></p>
-</li>
-<li><p><strong>activity</strong></p>
-<p>Returns trip activity data</p>
-<p><em>Parameters</em>:
-    <ul>
-        <li>  system: the system name (as specified in the systems endpoint)</li>
-        <li>feed: The source feed for the data, either "station" or "free_bike"</li>
-        <li>  start: The starting datetime, format: YYYYMMDDHH</li>
-        <li>  end: The ending datetime (inclusive), format: YYYYMMDDHH</li>
-        <li>  frequency: The period in which to group the data. Options are &#39;h&#39; (hours, default), &#39;d&#39; (day), &#39;m&#39; (month), &#39;y&#39; (year).</li>
-        <li>station: The station ID of the station (as specified in the stations endpoint). If no station is provided (default), data for the whole system will be returned. If &#39;all&#39; is provided, data for each station in the system will be returned.</li></ul>
-        <li>vehicle: the vehicle ID of the vehicle (as specified in the vehicles endpoint). If no vehicle is provided (default), data for the whole system will be returned. If &#39;all&#39; is provided, data for each vehicle type in the system will be returned.</li>
-<p><em>Example</em>: <a href="https://api.raccoon.bike/activity?system=mobi_vancouver&amp;start=2021012800&amp;end=2021012900&amp;frequency=m&amp;station=0001">https://api.raccoon.bike/activity?system=mobi_vancouver&amp;start=2021012800&amp;end=2021012900&amp;frequency=m&amp;station=0001</a>  </p>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BikeRaccoon API</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-<h2 id="license">License</h2>
-<p>This software is licensed under the <a href="https://opensource.org/licenses/MIT">MIT license</a>.</p>
-<p>Data provided by the BikeRaccoonAPI is licensed under the <a href="https://creativecommons.org/licenses/by/4.0/">Creative Commons BY 4.0 license</a>. 
-You are free to:</p>
-<ul>
-<li>Share — copy and redistribute the material in any medium or format</li>
-<li>Adapt — remix, transform, and build upon the material
-for any purpose, even commercially.</li>
-</ul>
-<p>You must give appropriate credit, provide a link to the license, and indicate if changes were made. You may do so in any reasonable manner, but not in any way that suggests the licensor endorses you or your use.
-You may not apply legal terms or technological measures that legally restrict others from doing anything the license permits.</p>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      line-height: 1.6;
+    }
+
+    a { color: #63b3ed; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    header {
+      background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
+      border-bottom: 1px solid #2d3748;
+      padding: 3rem 2rem;
+      text-align: center;
+    }
+
+    header h1 {
+      font-size: 2.5rem;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: -0.5px;
+    }
+
+    header h1 span { color: #f6ad55; }
+
+    header p {
+      margin-top: 0.75rem;
+      color: #a0aec0;
+      font-size: 1.05rem;
+      max-width: 600px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .badge {
+      display: inline-block;
+      margin-top: 1rem;
+      padding: 0.25rem 0.75rem;
+      background: #2d3748;
+      border: 1px solid #4a5568;
+      border-radius: 9999px;
+      font-size: 0.8rem;
+      color: #a0aec0;
+    }
+
+    main {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 2.5rem 1.5rem 4rem;
+    }
+
+    section { margin-bottom: 3rem; }
+
+    h2 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #718096;
+      margin-bottom: 1.25rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid #2d3748;
+    }
+
+    p { color: #cbd5e0; margin-bottom: 0.75rem; }
+
+    .endpoint-card {
+      background: #1a202c;
+      border: 1px solid #2d3748;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      overflow: hidden;
+    }
+
+    .endpoint-header {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.9rem 1.25rem;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .endpoint-header:hover { background: #2d3748; }
+
+    .method {
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 0.2rem 0.5rem;
+      border-radius: 4px;
+      background: #276749;
+      color: #9ae6b4;
+      letter-spacing: 0.5px;
+      flex-shrink: 0;
+    }
+
+    .endpoint-path {
+      font-family: "SFMono-Regular", Consolas, monospace;
+      font-size: 0.95rem;
+      color: #e2e8f0;
+      flex: 1;
+    }
+
+    .endpoint-summary {
+      font-size: 0.85rem;
+      color: #718096;
+    }
+
+    .endpoint-body {
+      padding: 1rem 1.25rem 1.25rem;
+      border-top: 1px solid #2d3748;
+    }
+
+    .endpoint-body p { font-size: 0.9rem; margin-bottom: 0.75rem; }
+
+    .params-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+      margin-bottom: 1rem;
+    }
+
+    .params-table th {
+      text-align: left;
+      padding: 0.4rem 0.75rem;
+      background: #2d3748;
+      color: #a0aec0;
+      font-weight: 600;
+    }
+
+    .params-table td {
+      padding: 0.5rem 0.75rem;
+      border-top: 1px solid #2d3748;
+      color: #cbd5e0;
+      vertical-align: top;
+    }
+
+    .params-table td:first-child {
+      font-family: monospace;
+      color: #90cdf4;
+    }
+
+    .params-table .optional { color: #718096; font-size: 0.75rem; }
+
+    .example {
+      background: #171923;
+      border: 1px solid #2d3748;
+      border-radius: 6px;
+      padding: 0.6rem 1rem;
+      font-family: monospace;
+      font-size: 0.82rem;
+      color: #9ae6b4;
+      overflow-x: auto;
+      word-break: break-all;
+    }
+
+    .example a { color: #9ae6b4; }
+
+    .note {
+      background: #2c2a1e;
+      border-left: 3px solid #d69e2e;
+      border-radius: 0 6px 6px 0;
+      padding: 0.75rem 1rem;
+      font-size: 0.875rem;
+      color: #e6cc8a;
+      margin-bottom: 0.75rem;
+    }
+
+    .license-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+
+    .license-card {
+      background: #1a202c;
+      border: 1px solid #2d3748;
+      border-radius: 8px;
+      padding: 1rem 1.25rem;
+    }
+
+    .license-card h3 { font-size: 0.9rem; color: #a0aec0; margin-bottom: 0.4rem; }
+    .license-card p { font-size: 0.875rem; margin: 0; }
+
+    @media (max-width: 600px) {
+      header h1 { font-size: 1.75rem; }
+      .license-grid { grid-template-columns: 1fr; }
+      .endpoint-summary { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Bike<span>Raccoon</span> API</h1>
+  <p>Estimated bikeshare trip data derived from real-time GBFS feeds.</p>
+  <span class="badge">v2.0</span>
+</header>
+
+<main>
+
+  <section>
+    <h2>About</h2>
+    <p>Many bikeshare systems publish real-time data via the <a href="https://github.com/NABSA/gbfs">GBFS specification</a>, including the number of bikes and docks at each station. By monitoring these counts over time, this tracker estimates trips — when bikes leave or arrive at a station.</p>
+    <div class="note">Trip counts are estimates only and may differ from official figures.</div>
+    <p>For a detailed explanation of the methodology, see <a href="https://notes.mikejarrett.ca/tracking-bikeshare-use-using-gbfs-feeds/">this blog post</a>.</p>
+  </section>
+
+  <section>
+    <h2>Endpoints</h2>
+
+    <div class="endpoint-card">
+      <div class="endpoint-header">
+        <span class="method">GET</span>
+        <span class="endpoint-path">/systems</span>
+        <span class="endpoint-summary">List tracked systems</span>
+      </div>
+      <div class="endpoint-body">
+        <p>Returns metadata for all tracked systems, including tracking start/end dates and timezone.</p>
+        <div class="example"><a href="https://api.raccoon.bike/systems">https://api.raccoon.bike/systems</a></div>
+      </div>
+    </div>
+
+    <div class="endpoint-card">
+      <div class="endpoint-header">
+        <span class="method">GET</span>
+        <span class="endpoint-path">/stations</span>
+        <span class="endpoint-summary">Station metadata</span>
+      </div>
+      <div class="endpoint-body">
+        <p>Returns station list and metadata for a given system.</p>
+        <table class="params-table">
+          <tr><th>Parameter</th><th>Description</th></tr>
+          <tr><td>system</td><td>System name <span class="optional">(required)</span></td></tr>
+        </table>
+        <div class="example"><a href="https://api.raccoon.bike/stations?system=bike_share_toronto">https://api.raccoon.bike/stations?system=bike_share_toronto</a></div>
+      </div>
+    </div>
+
+    <div class="endpoint-card">
+      <div class="endpoint-header">
+        <span class="method">GET</span>
+        <span class="endpoint-path">/vehicles</span>
+        <span class="endpoint-summary">Vehicle types</span>
+      </div>
+      <div class="endpoint-body">
+        <p>Returns vehicle types available in a system (e.g. classic bike, e-bike).</p>
+        <table class="params-table">
+          <tr><th>Parameter</th><th>Description</th></tr>
+          <tr><td>system</td><td>System name <span class="optional">(required)</span></td></tr>
+        </table>
+        <div class="example"><a href="https://api.raccoon.bike/vehicles?system=bike_share_toronto">https://api.raccoon.bike/vehicles?system=bike_share_toronto</a></div>
+      </div>
+    </div>
+
+    <div class="endpoint-card">
+      <div class="endpoint-header">
+        <span class="method">GET</span>
+        <span class="endpoint-path">/activity</span>
+        <span class="endpoint-summary">Trip activity data</span>
+      </div>
+      <div class="endpoint-body">
+        <p>Returns estimated trip and return counts for a system, optionally filtered by station, vehicle type, and time range.</p>
+        <table class="params-table">
+          <tr><th>Parameter</th><th>Description</th></tr>
+          <tr><td>system</td><td>System name <span class="optional">(required)</span></td></tr>
+          <tr><td>feed</td><td><code>station</code> or <code>free_bike</code> <span class="optional">(required)</span></td></tr>
+          <tr><td>start</td><td>Start datetime, format: <code>YYYYMMDDHH</code> <span class="optional">(required)</span></td></tr>
+          <tr><td>end</td><td>End datetime, format: <code>YYYYMMDDHH</code> <span class="optional">(required)</span></td></tr>
+          <tr><td>frequency</td><td><code>h</code> hour, <code>d</code> day, <code>m</code> month, <code>y</code> year <span class="optional">(default: h)</span></td></tr>
+          <tr><td>station</td><td>Station ID, or <code>all</code> for per-station data <span class="optional">(optional)</span></td></tr>
+          <tr><td>vehicle</td><td>Vehicle type ID, or <code>all</code> for per-type data <span class="optional">(optional)</span></td></tr>
+        </table>
+        <div class="example"><a id="activity-example" href="#"></a></div>
+      </div>
+    </div>
+
+  </section>
+
+  <section>
+    <h2>License</h2>
+    <div class="license-grid">
+      <div class="license-card">
+        <h3>Software</h3>
+        <p><a href="https://opensource.org/licenses/MIT">MIT License</a></p>
+      </div>
+      <div class="license-card">
+        <h3>Data</h3>
+        <p><a href="https://creativecommons.org/licenses/by/4.0/">Creative Commons BY 4.0</a> — free to share and adapt with attribution.</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<script>
+  function toYYYYMMDDHH(d) {
+    const pad = n => String(n).padStart(2, '0');
+    return `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}${pad(d.getHours())}`;
+  }
+
+  const now = new Date();
+  const weekAgo = new Date(now - 7 * 24 * 60 * 60 * 1000);
+  const start = toYYYYMMDDHH(weekAgo);
+  const end = toYYYYMMDDHH(now);
+
+  const base = 'https://api.raccoon.bike/activity';
+  const url = `${base}?system=mobi_vancouver&start=${start}&end=${end}&frequency=d`;
+
+  const el = document.getElementById('activity-example');
+  el.href = url;
+  el.textContent = url;
+</script>
+</body>
+</html>
