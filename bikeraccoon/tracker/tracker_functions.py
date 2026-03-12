@@ -210,27 +210,28 @@ def update_trips(system,feed_type,save_temp_data=False):
 
 def load_parquet(system,year_tag,feed_type):
     outpath=pathlib.Path(f"{system.data_path}/")
-    return pd.read_parquet(f"{outpath}/trips.{feed_type}.hourly.{year_tag}.parquet")
-    
-    
+    parquet_dir = outpath / f"trips.{feed_type}.hourly"
+    return pd.read_parquet(parquet_dir, filters=[('year', '==', int(year_tag))])
+
+
 def save_to_parquet(system,thdf,feed_type):
-    
+
     outpath=pathlib.Path(f"{system.data_path}/")
     outpath.mkdir(parents=True,exist_ok=True)
-    
-    years = set(thdf['datetime'].dt.year)
-    
-    for year_tag in years:
 
+    hourly = thdf.copy()
+    hourly['year'] = hourly['datetime'].dt.year
+    hourly['month'] = hourly['datetime'].dt.month
+    hourly.to_parquet(outpath / f"trips.{feed_type}.hourly",
+                      partition_cols=['year','month'], index=False,
+                      existing_data_behavior='delete_matching')
 
-        outfile = outpath.joinpath(f"trips.{feed_type}.hourly.{year_tag}.parquet")         
-        thdf[thdf['datetime'].dt.year==year_tag].to_parquet(outfile, index=False)
-        
-
-        # Also groupby day for faster querying
-        tddf = thdf.set_index('datetime').groupby([pd.Grouper(freq='d'),'station_id','vehicle_type_id'],dropna=False).sum().reset_index()
-        outfile = outpath.joinpath(f"trips.{feed_type}.daily.{year_tag}.parquet")
-        tddf.to_parquet(outfile, index=False)
+    daily = thdf.set_index('datetime').groupby([pd.Grouper(freq='d'),'station_id','vehicle_type_id'],dropna=False).sum().reset_index()
+    daily['year'] = daily['datetime'].dt.year
+    daily['month'] = daily['datetime'].dt.month
+    daily.to_parquet(outpath / f"trips.{feed_type}.daily",
+                     partition_cols=['year','month'], index=False,
+                     existing_data_behavior='delete_matching')
 
 
 def trim_raw(fname):
@@ -319,9 +320,9 @@ def make_free_bike_trips(bdf):
 
 
 def check_tracking_start(system):
-    
+
     try:
-        data_file = f"{system.data_path}/trips.*.hourly.*.parquet"
+        data_file = f"{system.data_path}/trips.*.hourly/year=*/month=*/*.parquet"
         qry = duckdb.query(f"""select min(datetime) from read_parquet('{data_file}')""")
         return qry.fetchall()[0][0]
     except:
@@ -329,7 +330,7 @@ def check_tracking_start(system):
 
 def check_tracking_end(system):
     try:
-        data_file = f"{system.data_path}/trips.*.hourly.*.parquet"
+        data_file = f"{system.data_path}/trips.*.hourly/year=*/month=*/*.parquet"
         qry = duckdb.query(f"""select max(datetime) from read_parquet('{data_file}')""")
         return qry.fetchall()[0][0]
     except:

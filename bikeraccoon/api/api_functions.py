@@ -27,9 +27,9 @@ def get_data_path(sys_name,feed_type,vehicle_type,freq):
     vehicle_type = 'all' if vehicle_type is None else vehicle_type
 
     if freq in ['h','t']:
-        return f'./tracker-data/{sys_name}/trips.{feed_type}.hourly.*.parquet'
+        return f'./tracker-data/{sys_name}/trips.{feed_type}.hourly/year=*/month=*/*.parquet'
     elif freq in ['d','m','y']:
-        return f'./tracker-data/{sys_name}/trips.{feed_type}.daily.*.parquet'
+        return f'./tracker-data/{sys_name}/trips.{feed_type}.daily/year=*/month=*/*.parquet'
     
     
 def api_response(f):
