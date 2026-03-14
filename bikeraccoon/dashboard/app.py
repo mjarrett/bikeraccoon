@@ -623,9 +623,56 @@ def update_charts(system_name, start_date, end_date, freq, feed, station):
     else:
         bar_fig = _empty_fig('No station breakdown available')
 
+    # Map
+    map_div = html.Div()
+    if df_stations is not None and station_info is not None and \
+            {'lat', 'lon'}.issubset(station_info.columns):
+        df_st_map = df_stations.reset_index()
+        if station:
+            df_st_map = df_st_map[df_st_map['station_id'].isin(station)]
+        st_map = (
+            df_st_map.groupby('station_id')[['trips', 'returns']]
+            .sum()
+            .reset_index()
+            .merge(station_info[['station_id', 'name', 'lat', 'lon']], on='station_id', how='left')
+        )
+        st_map = st_map[st_map['lat'].notna() & st_map['trips'] > 0]
+        if len(st_map) > 0:
+            max_trips = st_map['trips'].max()
+            sizes = ((st_map['trips'] / max_trips) * 32 + 8).tolist()
+            map_fig = go.Figure(go.Scattermapbox(
+                lat=st_map['lat'],
+                lon=st_map['lon'],
+                mode='markers',
+                marker=go.scattermapbox.Marker(
+                    size=sizes,
+                    color=COLORS['trips'],
+                    opacity=0.7,
+                ),
+                text=st_map['name'],
+                customdata=st_map['trips'],
+                hovertemplate='<b>%{text}</b><br>Trips: %{customdata:,}<extra></extra>',
+            ))
+            map_fig.update_layout(
+                mapbox_style='open-street-map',
+                mapbox=dict(
+                    center=dict(lat=st_map['lat'].mean(), lon=st_map['lon'].mean()),
+                    zoom=11,
+                ),
+                margin={'t': 0, 'b': 0, 'l': 0, 'r': 0},
+                height=450,
+                paper_bgcolor='white',
+            )
+            map_div = dcc.Graph(
+                figure=map_fig,
+                config={'doubleClick': False},
+                style={'marginBottom': '1.5rem'},
+            )
+
     return html.Div([
         html.Div(summary, style={'marginBottom': '1.5rem'}),
         dcc.Graph(figure=timeline_fig, style={'marginBottom': '1.5rem'}),
+        map_div,
         dcc.Graph(figure=bar_fig),
     ])
 
