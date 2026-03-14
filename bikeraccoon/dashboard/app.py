@@ -3,6 +3,7 @@ from dash import dcc, html, Input, Output
 import plotly.graph_objects as go
 import pandas as pd
 import datetime as dt
+from urllib.parse import parse_qs
 
 import bikeraccoon as br
 
@@ -41,12 +42,25 @@ app.layout = html.Div([
             'fontSize': '1.4rem',
             'fontWeight': '700',
         }),
-        html.A('API', href='https://api.raccoon.bike', target='_blank', style={
-            'textDecoration': 'none',
-            'color': COLORS['muted'],
-            'fontSize': '0.95rem',
-            'fontWeight': '500',
-        }),
+        html.Div([
+            html.A('API', href='https://api.raccoon.bike', target='_blank', style={
+                'textDecoration': 'none',
+                'color': COLORS['muted'],
+                'fontSize': '0.95rem',
+                'fontWeight': '500',
+                'marginRight': '1.5rem',
+            }),
+            html.Div([
+                html.Button('Bluesky ▾', className='nav-dropdown-btn'),
+                html.Div([
+                    html.Div([
+                        html.A('Montreal', href='https://bsky.app/profile/montreal.raccoon.bike', target='_blank'),
+                        html.A('Toronto', href='https://bsky.app/profile/toronto.raccoon.bike', target='_blank'),
+                        html.A('Vancouver', href='https://bsky.app/profile/vancouver.raccoon.bike', target='_blank'),
+                    ], className='nav-dropdown-menu-inner'),
+                ], className='nav-dropdown-menu'),
+            ], className='nav-dropdown'),
+        ], style={'display': 'flex', 'alignItems': 'center'}),
     ], style={
         'padding': '1rem 2rem',
         'borderBottom': '1px solid #e0e0e0',
@@ -54,6 +68,9 @@ app.layout = html.Div([
         'display': 'flex',
         'alignItems': 'center',
         'justifyContent': 'space-between',
+        'position': 'sticky',
+        'top': '0',
+        'zIndex': '200',
     }),
 
     # Front page
@@ -88,67 +105,102 @@ app.layout = html.Div([
 
         # Controls
         html.Div([
-            html.Div([
-                html.Label('Date Range', style={
-                    'fontWeight': '600',
-                    'display': 'block',
-                    'marginBottom': '0.5rem',
-                    'fontSize': '0.85rem',
-                }),
-                dcc.DatePickerRange(
-                    id='date-range',
-                    display_format='YYYY-MM-DD',
-                ),
-            ], style={'marginRight': '2.5rem'}),
+            html.Div('Custom Range', style={
+                'fontWeight': '600',
+                'fontSize': '0.85rem',
+                'marginBottom': '1rem',
+                'color': COLORS['muted'],
+                'textTransform': 'uppercase',
+                'letterSpacing': '0.05em',
+            }),
 
+            # Top row: date, freq, feed
             html.Div([
-                html.Label('Frequency', style={
-                    'fontWeight': '600',
-                    'display': 'block',
-                    'marginBottom': '0.5rem',
-                    'fontSize': '0.85rem',
-                }),
-                dcc.RadioItems(
-                    id='freq-selector',
-                    options=[
-                        {'label': 'Hourly', 'value': 'h'},
-                        {'label': 'Daily', 'value': 'd'},
-                        {'label': 'Monthly', 'value': 'm'},
-                        {'label': 'Yearly', 'value': 'y'},
-                    ],
-                    value='h',
-                    inline=True,
-                    inputStyle={'marginRight': '4px'},
-                    labelStyle={'marginRight': '16px', 'fontSize': '0.9rem'},
-                ),
-            ], style={'marginRight': '2.5rem'}),
+                html.Div([
+                    html.Label('Date Range', style={
+                        'fontWeight': '600',
+                        'display': 'block',
+                        'marginBottom': '0.5rem',
+                        'fontSize': '0.85rem',
+                    }),
+                    dcc.DatePickerRange(
+                        id='date-range',
+                        display_format='YYYY-MM-DD',
+                    ),
+                ], style={'marginRight': '2.5rem'}),
 
+                html.Div([
+                    html.Label('Frequency', style={
+                        'fontWeight': '600',
+                        'display': 'block',
+                        'marginBottom': '0.5rem',
+                        'fontSize': '0.85rem',
+                    }),
+                    dcc.RadioItems(
+                        id='freq-selector',
+                        options=[
+                            {'label': 'Hourly', 'value': 'h'},
+                            {'label': 'Daily', 'value': 'd'},
+                            {'label': 'Monthly', 'value': 'm'},
+                            {'label': 'Yearly', 'value': 'y'},
+                        ],
+                        value='h',
+                        inline=True,
+                        inputStyle={'marginRight': '4px'},
+                        labelStyle={'marginRight': '16px', 'fontSize': '0.9rem'},
+                    ),
+                ], style={'marginRight': '2.5rem'}),
+
+                html.Div([
+                    html.Label('Feed', style={
+                        'fontWeight': '600',
+                        'display': 'block',
+                        'marginBottom': '0.5rem',
+                        'fontSize': '0.85rem',
+                    }),
+                    dcc.RadioItems(
+                        id='feed-selector',
+                        options=[
+                            {'label': 'Station', 'value': 'station'},
+                            {'label': 'Free Bike', 'value': 'free_bike'},
+                        ],
+                        value='station',
+                        inline=True,
+                        inputStyle={'marginRight': '4px'},
+                        labelStyle={'marginRight': '16px', 'fontSize': '0.9rem'},
+                    ),
+                ], id='feed-container'),
+            ], style={
+                'display': 'flex',
+                'alignItems': 'flex-start',
+                'flexWrap': 'wrap',
+                'gap': '1rem',
+            }),
+
+            # Bottom row: station selector
             html.Div([
-                html.Label('Feed', style={
+                html.Label('Station', style={
                     'fontWeight': '600',
                     'display': 'block',
                     'marginBottom': '0.5rem',
                     'fontSize': '0.85rem',
                 }),
-                dcc.RadioItems(
-                    id='feed-selector',
-                    options=[
-                        {'label': 'Station', 'value': 'station'},
-                        {'label': 'Free Bike', 'value': 'free_bike'},
-                    ],
-                    value='station',
-                    inline=True,
-                    inputStyle={'marginRight': '4px'},
-                    labelStyle={'marginRight': '16px', 'fontSize': '0.9rem'},
+                dcc.Dropdown(
+                    id='station-selector',
+                    options=[],
+                    value=[],
+                    multi=True,
+                    placeholder='All Stations',
+                    style={'width': '100%'},
                 ),
-            ]),
+            ], style={'marginTop': '1rem'}),
+
         ], style={
             **CARD_STYLE,
-            'display': 'flex',
-            'alignItems': 'flex-start',
-            'flexWrap': 'wrap',
-            'gap': '1rem',
             'marginBottom': '1.5rem',
+            'position': 'sticky',
+            'top': '59px',
+            'zIndex': '100',
         }),
 
         dcc.Loading(
@@ -253,7 +305,7 @@ def load_front_page(pathname):
                 html.Td(status_badge, style=td_style),
                 html.Td(tracking_start, style={**td_style, 'color': COLORS['muted'], 'fontSize': '0.9rem'}),
                 html.Td(sparkline, style={**td_style, 'width': '180px', 'padding': '0.25rem 1rem'}),
-            ], style={'backgroundColor': 'white'})
+            ], style={'backgroundColor': 'white'}, className='system-row')
         )
 
     return html.Div(
@@ -303,15 +355,67 @@ def update_system_header(system_name):
 
 
 @app.callback(
+    Output('feed-container', 'style'),
+    Output('feed-selector', 'value'),
+    Input('current-system', 'data'),
+)
+def update_feed_visibility(system_name):
+    if not system_name:
+        return {}, 'station'
+    try:
+        api = br.LiveAPI(system_name)
+        has_free_bike = api.info.get('track_free_bikes', True)
+    except Exception:
+        has_free_bike = True
+    style = {} if has_free_bike else {'display': 'none'}
+    return style, 'station'
+
+
+@app.callback(
+    Output('station-selector', 'options'),
+    Output('station-selector', 'value'),
+    Input('current-system', 'data'),
+    dash.State('url', 'search'),
+)
+def populate_station_dropdown(system_name, search):
+    if not system_name:
+        return [], []
+    try:
+        api = br.LiveAPI(system_name)
+        station_info = api.get_stations()
+    except Exception:
+        return [], []
+    if station_info is None or len(station_info) == 0:
+        return [], []
+    options = [
+        {'label': row['name'], 'value': row['station_id']}
+        for _, row in station_info.sort_values('name').iterrows()
+    ]
+    params = parse_qs((search or '').lstrip('?'))
+    selected = params.get('station', [])
+    valid_ids = {o['value'] for o in options}
+    selected = [s for s in selected if s in valid_ids]
+    return options, selected
+
+
+@app.callback(
     Output('date-range', 'start_date'),
     Output('date-range', 'end_date'),
     Input('current-system', 'data'),
+    dash.State('url', 'search'),
 )
-def set_default_dates(system_name):
+def set_default_dates(system_name, search):
     if not system_name:
         return dash.no_update, dash.no_update
-    end = dt.date.today()
-    start = end - dt.timedelta(days=7)
+    params = parse_qs((search or '').lstrip('?'))
+    try:
+        start = dt.date.fromisoformat(params['start'][0])
+    except (KeyError, ValueError):
+        start = dt.date.today() - dt.timedelta(days=7)
+    try:
+        end = dt.date.fromisoformat(params['end'][0])
+    except (KeyError, ValueError):
+        end = dt.date.today()
     return start.isoformat(), end.isoformat()
 
 
@@ -393,8 +497,9 @@ def update_alltime_stats(system_name):
     Input('date-range', 'end_date'),
     Input('freq-selector', 'value'),
     Input('feed-selector', 'value'),
+    Input('station-selector', 'value'),
 )
-def update_charts(system_name, start_date, end_date, freq, feed):
+def update_charts(system_name, start_date, end_date, freq, feed, station):
     if not system_name or not start_date or not end_date:
         return html.Div()
 
@@ -407,12 +512,21 @@ def update_charts(system_name, start_date, end_date, freq, feed):
         'fontSize': '0.95rem',
     })
 
+    station = station or []
     try:
         api = br.LiveAPI(system_name)
         t1 = dt.datetime.fromisoformat(start_date)
         t2 = dt.datetime.fromisoformat(end_date).replace(hour=23)
-        df_agg = api.get_trips(t1, t2, freq=freq, feed=feed)
         df_stations = api.get_trips(t1, t2, freq=freq, feed=feed, station='all')
+        if station:
+            if df_stations is not None and len(df_stations) > 0:
+                df_st_filtered = df_stations.reset_index()
+                df_st_filtered = df_st_filtered[df_st_filtered['station_id'].isin(station)]
+                df_agg = df_st_filtered.groupby('datetime')[['trips', 'returns']].sum()
+            else:
+                df_agg = None
+        else:
+            df_agg = api.get_trips(t1, t2, freq=freq, feed=feed)
         station_info = api.get_stations()
     except ValueError:
         return no_data_div
@@ -459,12 +573,16 @@ def update_charts(system_name, start_date, end_date, freq, feed):
         paper_bgcolor='white',
         legend={'orientation': 'h', 'y': -0.15},
         margin={'t': 50, 'b': 60},
+        height=320,
     )
 
     # Station breakdown chart
     if df_stations is not None and len(df_stations) > 0:
         df_st = df_stations.reset_index()
         df_st['datetime'] = pd.to_datetime(df_st['datetime'], utc=True)
+
+        if station:
+            df_st = df_st[df_st['station_id'].isin(station)]
 
         if 'station_id' in df_st.columns and df_st['station_id'].notna().any():
             st_agg = (
@@ -491,7 +609,7 @@ def update_charts(system_name, start_date, end_date, freq, feed):
                 ),
             ])
             bar_fig.update_layout(
-                title='Top 25 Stations by Trips',
+                title='Stations by Trips' if station else 'Top 25 Stations by Trips',
                 xaxis_title='Count',
                 yaxis_title='Station',
                 barmode='group',
@@ -510,6 +628,23 @@ def update_charts(system_name, start_date, end_date, freq, feed):
         dcc.Graph(figure=timeline_fig, style={'marginBottom': '1.5rem'}),
         dcc.Graph(figure=bar_fig),
     ])
+
+
+@app.callback(
+    Output('url', 'search'),
+    Input('date-range', 'start_date'),
+    Input('date-range', 'end_date'),
+    Input('station-selector', 'value'),
+    dash.State('current-system', 'data'),
+    prevent_initial_call=True,
+)
+def update_url_search(start_date, end_date, station, system_name):
+    if not system_name or not start_date or not end_date:
+        return dash.no_update
+    qs = f'?start={start_date}&end={end_date}'
+    if station:
+        qs += '&' + '&'.join(f'station={s}' for s in station)
+    return qs
 
 
 def _make_sparkline(system_name, t1, t2):
@@ -560,7 +695,12 @@ def _stat_card(label, value, color):
             'color': COLORS['muted'],
             'marginTop': '0.2rem',
         }),
-    ], style={**CARD_STYLE, 'padding': '1rem 1.5rem', 'minWidth': '140px'})
+    ], style={
+        **CARD_STYLE,
+        'padding': '1rem 1.5rem',
+        'minWidth': '140px',
+        'borderTop': f'3px solid {color}',
+    })
 
 
 def _empty_fig(msg=None):
