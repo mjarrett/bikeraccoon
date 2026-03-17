@@ -102,8 +102,8 @@ def update_system_table(system):
     
     
 def update_station_status_raw(system):
+    """Returns (success, error_message)."""
     system.logger.info(f"Updating station bikes")
-    # Query stations and save to temp table
     ddf_file = f"{system.data_path}/raw.station.parquet"
     try:
         ddf = pd.read_parquet(ddf_file)
@@ -112,22 +112,16 @@ def update_station_status_raw(system):
     try:
         ddf_query = gbfs.query_station_status(system['url'])
         ddf_query['datetime'] = ddf_query['datetime'].dt.tz_convert(system['tz'])
-        # ddf_query['station_id'] = ddf_query['station_id'].astype(str)
-        
-        
-        
         ddf = pd.concat([ddf,ddf_query])
-        
-        
-        
-        
     except Exception as e:
         system.logger.debug(f"gbfs query error, skipping stations_raw db update: {e}")
-        return 
-        
+        return False, str(e)
+
     ddf.to_parquet(ddf_file,index=False)
-    
+    return True, None
+
 def update_free_bike_status_raw(system):
+    """Returns (success, error_message)."""
     system.logger.info(f"Updating free bikes")
     bdf_file = f"{system.data_path}/raw.free_bike.parquet"
     try:
@@ -138,16 +132,126 @@ def update_free_bike_status_raw(system):
         bdf_query = gbfs.query_free_bike_status(system['url'])
         bdf_query['datetime'] = bdf_query['datetime'].dt.tz_convert(system['tz'])
         bdf = pd.concat([bdf,bdf_query])
-        
     except Exception as e:
         system.logger.debug(f"gbfs query error, skipping free_bikes_raw db update: {e}")
-        return 
-
+        return False, str(e)
 
     bdf.to_parquet(bdf_file,index=False)
+    return True, None
 
 
-    
+def send_alert_email(smtp_config, subject, body):
+    """Send an alert email via SMTP."""
+    import smtplib
+    from email.mime.text import MIMEText
+
+    msg = MIMEText(body)
+    msg['Subject'] = subject
+    msg['From'] = smtp_config['from']
+    to = smtp_config['to']
+    msg['To'] = ', '.join(to) if isinstance(to, list) else to
+
+    with smtplib.SMTP(smtp_config['host'], smtp_config.get('port', 587)) as server:
+        if smtp_config.get('tls', True):
+            server.starttls()
+        if 'username' in smtp_config:
+            server.login(smtp_config['username'], smtp_config['password'])
+        server.send_message(msg)
+
+
+
+def _fmt_dt(val):
+    if val is None or (isinstance(val, float) and pd.isna(val)):
+        return "—"
+    try:
+        return pd.Timestamp(val).strftime("%Y-%m-%d %H:%M")
+    except Exception:
+        return str(val)
+
+
+def _query_trip_summary(system_data_path, feed):
+    glob = str(pathlib.Path(system_data_path) / f"trips.{feed}.hourly" / "year=*" / "month=*" / "*.parquet")
+    try:
+        rows = duckdb.query(f"""
+            SELECT min(datetime), max(datetime), sum(trips), sum(returns)
+            FROM read_parquet('{glob}', hive_partitioning=true)
+        """).fetchall()
+    except Exception:
+        return None
+
+    if not rows or rows[0][0] is None:
+        return None
+
+    first, last, total_trips, total_returns = rows[0]
+    cutoff = pd.Timestamp(last) - pd.Timedelta(hours=24)
+    try:
+        rows24 = duckdb.query(f"""
+            SELECT sum(trips), sum(returns)
+            FROM read_parquet('{glob}', hive_partitioning=true)
+            WHERE datetime >= '{cutoff}'
+        """).fetchall()
+        trips_24   = int(rows24[0][0]) if rows24 and rows24[0][0] is not None else 0
+        returns_24 = int(rows24[0][1]) if rows24 and rows24[0][1] is not None else 0
+    except Exception:
+        trips_24 = returns_24 = 0
+
+    return {
+        "first":      _fmt_dt(first),
+        "last":       _fmt_dt(last),
+        "trips_24":   trips_24,
+        "returns_24": returns_24,
+    }
+
+
+def build_system_summary(system):
+    lines = []
+    name = system['name']
+    tz   = system.get('tz', '?')
+
+    latest_upd = system.get('latest_update')
+    if latest_upd is not None:
+        try:
+            age = dt.datetime.now(dt.timezone.utc) - pd.Timestamp(latest_upd).tz_convert('UTC')
+            age_str = f"{int(age.total_seconds() // 60)}m ago"
+            stale   = age > dt.timedelta(hours=1)
+        except Exception:
+            age_str, stale = '?', False
+    else:
+        age_str, stale = '?', False
+
+    stale_flag = '  *** STALE ***' if stale else ''
+    lines.append(f"{'='*50}")
+    lines.append(f"  {name}  [{tz}]{stale_flag}")
+    lines.append(f"{'='*50}")
+    lines.append(f"  Last update : {_fmt_dt(latest_upd)}  ({age_str})")
+    lines.append(f"  Data range  : {_fmt_dt(system.get('tracking_start'))}  →  {_fmt_dt(system.get('tracking_end'))}")
+
+    try:
+        sdf = pd.read_parquet(pathlib.Path(system.data_path) / "stations.parquet")
+        n_active = int(sdf['active'].sum()) if 'active' in sdf.columns else '?'
+        lines.append(f"  Stations    : {n_active} active / {len(sdf)} total")
+    except Exception:
+        lines.append(f"  Stations    : —")
+
+    for feed in ('station', 'free_bike'):
+        label = feed.replace('_', ' ').title()
+        s = _query_trip_summary(system.data_path, feed)
+        if s is None:
+            lines.append(f"  {label:12s}: no data")
+        else:
+            lines.append(f"  {label:12s}: {s['first']} → {s['last']}")
+            lines.append(f"  {'':12s}  last 24h — {s['trips_24']} trips, {s['returns_24']} returns")
+
+    return '\n'.join(lines)
+
+
+def build_daily_summary(systems):
+    import socket
+    header = f"Tracker status — {dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  [{socket.gethostname()}]\n"
+    body   = '\n\n'.join(build_system_summary(s) for s in systems)
+    return header + '\n' + body
+
+
 def update_trips(system,feed_type,save_temp_data=False):
     
     """

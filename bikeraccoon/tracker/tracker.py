@@ -11,47 +11,31 @@ from .tracker_functions import *
 
 
 def update_system_raw(system):
+    """Returns dict with feed success/error info for failure tracking in the main loop."""
     if not system['tracking']:
-        return
-       
-    
+        return {'station': None, 'free_bike': None}
+
     system.logger.info("querying GBFS info")
-    
-    
-    if system.get('track_stations',True):
-        try:
-            update_station_status_raw(system)
-        except Exception as e:
-            system.logger.info(f"failed station update \n{e}")
-    
-    
-        # try:
-        #     update_station_status_vehicle_type_raw(system)
-        # except Exception as e:
-        #     system.logger.info(f"failed vehicle type update \n{e}")
-        
+
+    station_ok, station_err = None, None
+    free_bike_ok, free_bike_err = None, None
+
+    if system.get('track_stations', True):
+        station_ok, station_err = update_station_status_raw(system)
     else:
         system.logger.info("skipping station check")
-        
-        
-    if system.get('track_free_bikes',True):
-        try:
-            update_free_bike_status_raw(system)
-        except Exception as e:
-            system.logger.info(f"failed free bike update \n{e}")
-    
-        # try:
-        #     update_free_bikes_vehicle_type_raw(system)
-        # except Exception as e:
-        #     system.logger.info(f"failed free bike vehicle type update \n{e}")
-    
-    
+
+    if system.get('track_free_bikes', True):
+        free_bike_ok, free_bike_err = update_free_bike_status_raw(system)
     else:
-        system.logger.info(f"skipping free bike check")
-            
-            
-        
-    system['tracking_end'] = dt.datetime.utcnow() # Last update
+        system.logger.info("skipping free bike check")
+
+    system['tracking_end'] = dt.datetime.utcnow()
+
+    return {
+        'station': station_ok, 'station_error': station_err,
+        'free_bike': free_bike_ok, 'free_bike_error': free_bike_err,
+    }
 
 def update_system(system):
     if not system['tracking']:
@@ -71,9 +55,54 @@ def update_system(system):
     
     return True
 
-def tracker(systems_file='systems.json',log_path=None,data_path='tracker-data',
+def _handle_feed_alerts(systems, results, failure_threshold, smtp_config, logger):
+    """Track consecutive failures per system/feed and send alert/recovery emails."""
+    for system, result in zip(systems, results):
+        for feed in ('station', 'free_bike'):
+            ok = result.get(feed)
+            if ok is None:  # feed not tracked for this system
+                continue
+
+            key_failures = f'__{feed}_consecutive_failures'
+            key_alerted  = f'__{feed}_alert_sent'
+
+            if ok:
+                if system.get(key_alerted):
+                    # Send recovery email
+                    if smtp_config:
+                        try:
+                            send_alert_email(
+                                smtp_config,
+                                subject=f"[bikeraccoon] RECOVERED: {system['name']} ({feed})",
+                                body=f"System '{system['name']}' ({feed} feed) is processing normally again.",
+                            )
+                        except Exception as e:
+                            logger.warning(f"Failed to send recovery email for {system['name']}: {e}")
+                system[key_failures] = 0
+                system[key_alerted] = False
+            else:
+                n = system.get(key_failures, 0) + 1
+                system[key_failures] = n
+                logger.warning(f"{system['name']} {feed} feed failure: {result.get(feed + '_error')}")
+                if n >= failure_threshold and not system.get(key_alerted) and smtp_config:
+                    try:
+                        send_alert_email(
+                            smtp_config,
+                            subject=f"[bikeraccoon] Feed failure: {system['name']} ({feed})",
+                            body=(
+                                f"System '{system['name']}' has had {n} consecutive failures "
+                                f"on the {feed} feed.\n\nLast error:\n{result.get(feed + '_error')}"
+                            ),
+                        )
+                        system[key_alerted] = True
+                    except Exception as e:
+                        logger.warning(f"Failed to send alert email for {system['name']}: {e}")
+
+
+def tracker(systems_file='systems.json', log_path=None, data_path='tracker-data',
             update_interval=20, query_interval=20, station_check_hour=4,
-            save_temp_data=False):
+            save_temp_data=False, smtp_config=None, failure_threshold=5,
+            summary_hour=8):
     
     ## SETUP LOGGING
     if log_path is not None:
@@ -113,7 +142,9 @@ def tracker(systems_file='systems.json',log_path=None,data_path='tracker-data',
             update_vehicle_types(system)
 
     logger.info("Daemon started successfully")
-    
+
+    last_summary_date = None
+
     while True:
         
         
@@ -127,15 +158,31 @@ def tracker(systems_file='systems.json',log_path=None,data_path='tracker-data',
 
 
         with Pool(4) as p:
-            p.map(update_system_raw, systems)
+            raw_results = p.map(update_system_raw, systems)
+
+        _handle_feed_alerts(systems, raw_results, failure_threshold, smtp_config, logger)
 
         
         if dt.datetime.now() >  last_update + update_delta:
             last_update = dt.datetime.now()
-            
+
 
             with Pool(4) as p:
                 res = p.map(update_system,systems)
+
+        today = dt.date.today()
+        if dt.datetime.now().hour == summary_hour and last_summary_date != today:
+            last_summary_date = today
+            if smtp_config:
+                try:
+                    send_alert_email(
+                        smtp_config,
+                        subject=f"[bikeraccoon] Daily summary — {today}",
+                        body=build_daily_summary(systems),
+                    )
+                    logger.info("Daily summary email sent")
+                except Exception as e:
+                    logger.warning(f"Failed to send daily summary email: {e}")
                         
                     
         
