@@ -1,56 +1,61 @@
 # bikeraccoon
 
-This package contains several modules:
-* A GBFS feed tracker
-* A HTTP API for remote access to tracker data
-* A Python API for native Python access to tracker data
-* A web dashboard for displaying tracker data
+A Python package for tracking and querying bikeshare trip activity via [GBFS](https://gbfs.org/) feeds.
+
+Bikeraccoon polls GBFS feeds, estimates trips from dock/bike availability changes, and stores the results as Parquet files. Data is exposed via a Python client, a Flask HTTP API, and a Dash web dashboard.
+
+Live data is available at [raccoon.bike](https://raccoon.bike).
 
 ## Installation
 
-To install, I recommend cloning this repository and installing via `pip install -e /path/to/bikeraccoon/`. I don't recommending installing directly from git.
-
-## Python API Usage
-
+```bash
+git clone https://github.com/mjarrett/bikeraccoon
+pip install -e bikeraccoon/
 ```
-import bikeracccoon as br
 
-# Get a list of available systems:
+For bot/plotting support:
+```bash
+pip install -e bikeraccoon/[bot]
+```
+
+## Python API
+
+```python
+import bikeraccoon as br
+
+# List available systems
 br.get_systems()
 
-# Connect to API
+# Connect to a system
 api = br.LiveAPI('mobi_vancouver')
+
+# Trip activity — returns a DataFrame
+api.get_trips(t1, t2, freq='d')           # all trips
+api.get_station_trips(t1, t2, freq='h')   # docked bikes only
+api.get_free_bike_trips(t1, t2, freq='h') # free-floating only
+
+# Station info
+api.get_stations()
 ```
 
-## LiveAPI methods
+`t1`/`t2` are Python `datetime` objects. `freq` is `'h'` (hourly), `'d'` (daily), or `'m'` (monthly).
 
-api.get_stations()
-Returns a dataframe with information about each station in the bikeshare system.
+## HTTP API
 
-api.get_system_trips(t1,t2=None,freq='h')
-* t1: python datetime instance
-* t2: python datetime instance
-* freq: How to group results ('h','d','m','y')
-Returns dataframe with columns "station trips" for trips associated with docking stations, and "free bike trips" for trips associated with free floating bikes.
+The API is served by the `bikeraccoon.api` Flask app. Endpoints:
 
-api.get_station_trips(t1,t2=None,freq='h',station='all')
-* t1: python datetime instance
-* t2: python datetime instance
-* freq: How to group results ('h','d','m','y')
-* station: station_id of a station in the system. If station='all', returns data for all stations.
-Returns long-style dataframe with rows for each timepoint and station
+| Endpoint | Description |
+|---|---|
+| `GET /systems` | List tracked systems |
+| `GET /stations?system=` | Station info for a system |
+| `GET /vehicles?system=` | Vehicle types |
+| `GET /activity?system=&start=&end=&frequency=` | Trip activity |
+| `GET /gbfs?system=` | Raw GBFS feed data |
 
-api.get_free_bike_trips(t1,t2=None,freq='h')
-* t1: python datetime instance
-* t2: python datetime instance
-* freq: How to group results ('h','d','m','y')
-Returns a dataframe with data for free-floating bike trips
+## Architecture
 
-The API calls use LRU caching to avoid repeatedly querying the API with the same query.
-
-## Twitter bikesharebots
-
-Several twitter bots use this package to generate stats and figures, such as [VanBikeShareBot](https://twitter.com/vanbikesharebot). For an example of this, see the file `sample_bikesharebot.py`. 
-
-
-
+- `bikeraccoon/gbfs/` — GBFS feed queries
+- `bikeraccoon/tracker/` — polling daemon; detects trips; writes Parquet data
+- `bikeraccoon/api/` — Flask HTTP API over the Parquet data
+- `bikeraccoon/dashboard/` — Dash web dashboard
+- `bikeraccoon/bot/` — social media bot utilities
