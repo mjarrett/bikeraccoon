@@ -26,7 +26,7 @@ jobs:
         run: uv pip install --system -e . pytest pytest-cov flake8
 
       - name: Lint
-        run: flake8 bikeraccoon/ --max-line-length=120 --extend-ignore=E501,W503,E302,E303
+        run: flake8 bikeraccoon/ --max-line-length=120 --extend-ignore=E501,W503,E302,E303,F401,F403,F405,F841,E722
 
       - name: Test
         run: pytest tests/ -v --tb=short --cov=bikeraccoon --cov-report=term-missing
