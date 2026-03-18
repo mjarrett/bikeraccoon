@@ -1,5 +1,6 @@
 import time
 import datetime as dt
+import pandas as pd
 import sys
 import json
 import logging
@@ -175,6 +176,16 @@ def tracker(systems_file='systems.json', log_path=None, data_path='tracker-data'
             last_summary_date = today
             if smtp_config:
                 try:
+                    for system in systems:
+                        try:
+                            meta = pd.read_parquet(
+                                pathlib.Path(system.data_path) / 'system.parquet'
+                            ).iloc[0].to_dict()
+                            for k in ('tracking_start', 'tracking_end', 'latest_update'):
+                                if k in meta:
+                                    system[k] = meta[k]
+                        except Exception:
+                            pass
                     send_alert_email(
                         smtp_config,
                         subject=f"[bikeraccoon] Daily summary — {today}",
