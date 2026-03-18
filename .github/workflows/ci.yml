@@ -34,7 +34,7 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/master' && github.event_name == 'push'
-    environment: staging
+    environment: br-stg
 
     steps:
       - name: Deploy to staging
@@ -53,7 +53,7 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
-    environment: production
+    environment: br-prod
 
     steps:
       - name: Deploy to production
