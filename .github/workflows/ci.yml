@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [master, main]
+    tags: ['v*']
   pull_request:
     branches: [master, main]
 
@@ -30,20 +31,41 @@ jobs:
       - name: Test
         run: pytest tests/ -v --tb=short --cov=bikeraccoon --cov-report=term-missing
 
-  deploy:
+  deploy-staging:
     needs: test
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    environment: staging
+
+    steps:
+      - name: Deploy to staging
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USER }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          script: |
+            cd /srv/bikeraccoon
+            git pull origin master
+            /srv/bikeraccoon/.venv/bin/pip install -e . -q
+            sudo systemctl restart br-tracker br-api br-dash
+
+  deploy-prod:
+    needs: test
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    environment: production
 
     steps:
       - name: Deploy to production
         uses: appleboy/ssh-action@v1
         with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          host: ${{ secrets.PROD_HOST }}
+          username: ${{ secrets.PROD_USER }}
+          key: ${{ secrets.PROD_SSH_KEY }}
           script: |
             cd /srv/bikeraccoon
-            git pull origin master
-            uv pip install -e .
-            sudo systemctl restart br-tracker br-api
+            git fetch --tags
+            git checkout ${{ github.ref_name }}
+            /srv/bikeraccoon/.venv/bin/pip install -e . -q
+            sudo systemctl restart br-tracker br-api br-dash
