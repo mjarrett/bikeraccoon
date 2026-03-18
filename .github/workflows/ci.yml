@@ -48,6 +48,9 @@ jobs:
             git pull origin master
             uv pip install --python /srv/br-tracker/.venv/bin/python -e . -q
             sudo systemctl restart br-tracker br-api
+            sleep 5
+            systemctl is-active --quiet br-tracker || (journalctl -u br-tracker -n 20 --no-pager && exit 1)
+            systemctl is-active --quiet br-api || (journalctl -u br-api -n 20 --no-pager && exit 1)
 
   deploy-prod:
     needs: test
@@ -68,3 +71,6 @@ jobs:
             git checkout ${{ github.ref_name }}
             uv pip install --python /srv/br-tracker/.venv/bin/python -e . -q
             sudo systemctl restart br-tracker br-api
+            sleep 5
+            systemctl is-active --quiet br-tracker || (journalctl -u br-tracker -n 20 --no-pager && exit 1)
+            systemctl is-active --quiet br-api || (journalctl -u br-api -n 20 --no-pager && exit 1)
