@@ -124,7 +124,7 @@ def tracker(systems_file='systems.json', log_path=None, data_path='tracker-data'
     # Initial Setup
     for system in systems:
         system.set_logger(log_path)
-        system.data_path = f'{data_path}/{system['name']}/'
+        system.data_path = f'{data_path}/{system["name"]}/'
         system.station_check_hour = station_check_hour
         system.check_url()
 
