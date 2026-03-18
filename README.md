@@ -1,5 +1,7 @@
 # bikeraccoon
 
+[![CI](https://github.com/mjarrett/bikeraccoon/actions/workflows/ci.yml/badge.svg)](https://github.com/mjarrett/bikeraccoon/actions/workflows/ci.yml)
+
 A Python package for tracking and querying bikeshare trip activity via [GBFS](https://gbfs.org/) feeds.
 
 Bikeraccoon polls GBFS feeds, estimates trips from dock/bike availability changes, and stores the results as Parquet files. Data is exposed via a Python client, a Flask HTTP API, and a Dash web dashboard.
