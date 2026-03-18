@@ -46,7 +46,7 @@ jobs:
           script: |
             cd /srv/bikeraccoon
             git pull origin master
-            /srv/bikeraccoon/.venv/bin/pip install -e . -q
+            uv pip install --python /srv/br-tracker/.venv/bin/python -e . -q
             sudo systemctl restart br-tracker br-api br-dash
 
   deploy-prod:
@@ -66,5 +66,5 @@ jobs:
             cd /srv/bikeraccoon
             git fetch --tags
             git checkout ${{ github.ref_name }}
-            /srv/bikeraccoon/.venv/bin/pip install -e . -q
+            uv pip install --python /srv/br-tracker/.venv/bin/python -e . -q
             sudo systemctl restart br-tracker br-api br-dash
