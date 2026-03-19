@@ -8,7 +8,8 @@ import pathlib
 
 import duckdb
 
-from bikeraccoon._version import version
+from importlib.metadata import version as _get_version
+version = _get_version("bikeraccoon")
 
 
 class BRJSONProvider(DefaultJSONProvider):
