@@ -351,13 +351,13 @@ def make_station_trips(ddf):
     df = df.fillna(0.0).astype(int)
 
     df_stack = df.stack(future_stack=True).stack(future_stack=True).reset_index()
-    df_stack.columns = ['datetime', 'vehicle_type_id', 'station_id', 'trips']
+    df_stack.columns = ['datetime', 'vehicle_type_id', 'station_id', 'diff']
 
-    df_stack['returns'] = df_stack['trips']
-    df_stack.loc[df_stack['returns'] < 0, 'returns'] = 0
-
-    df_stack.loc[df_stack['trips'] > 0, 'trips'] = 0
-    df_stack['trips'] = -1*df_stack['trips']
+    # positive diff = bikes decreased = departure (trip)
+    # negative diff = bikes increased = arrival (return)
+    df_stack['trips'] = df_stack['diff'].clip(lower=0)
+    df_stack['returns'] = (-df_stack['diff']).clip(lower=0)
+    df_stack = df_stack.drop(columns='diff')
 
     df_stack = df_stack.set_index('datetime').groupby(
         [pd.Grouper(freq='h'), 'station_id', 'vehicle_type_id'], dropna=False).sum().reset_index()
@@ -386,14 +386,14 @@ def make_free_bike_trips(bdf):
     df = df.fillna(0.0).astype(int)
 
     df_stack = df.stack(future_stack=True).stack(future_stack=True).reset_index()
-    df_stack.columns = ['datetime', 'vehicle_type_id', 'station_id', 'trips']
+    df_stack.columns = ['datetime', 'vehicle_type_id', 'station_id', 'diff']
     df_stack['station_id'] = None if pivot_col == 'latlon' else df_stack['station_id']
 
-    df_stack['returns'] = df_stack['trips']
-    df_stack.loc[df_stack['returns'] < 0, 'returns'] = 0
-
-    df_stack.loc[df_stack['trips'] > 0, 'trips'] = 0
-    df_stack['trips'] = -1*df_stack['trips']
+    # positive diff = bikes decreased = departure (trip)
+    # negative diff = bikes increased = arrival (return)
+    df_stack['trips'] = df_stack['diff'].clip(lower=0)
+    df_stack['returns'] = (-df_stack['diff']).clip(lower=0)
+    df_stack = df_stack.drop(columns='diff')
 
     df_stack = df_stack.set_index('datetime').groupby(
         [pd.Grouper(freq='h'), 'station_id', 'vehicle_type_id'], dropna=False).sum().reset_index()
