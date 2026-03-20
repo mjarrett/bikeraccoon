@@ -14,3 +14,12 @@ repos:
         args:
           - --max-line-length=120
           - --extend-ignore=E501,W503,E302,E303,F401,F403,F405,F841,E722
+
+  - repo: local
+    hooks:
+      - id: pytest
+        name: pytest
+        entry: uv run --no-sync pytest tests/ -q
+        language: system
+        pass_filenames: false
+        always_run: true
