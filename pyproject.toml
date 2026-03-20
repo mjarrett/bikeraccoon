@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bikeraccoon"
-version = "2.0"
-description = "Python utilities for accessing the raccoon.bike bikeshare API"
+version = "3.0"
+description = "Python utilities for tracking bike share usage"
 authors = [{ name = "Mike Jarrett", email = "msjarrett@gmail.com" }]
 requires-python = ">=3.11"
 dependencies = [
