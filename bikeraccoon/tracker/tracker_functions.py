@@ -103,7 +103,10 @@ def update_station_status_raw(system):
     ddf_file = f"{system.data_path}/raw.station.parquet"
     try:
         ddf = pd.read_parquet(ddf_file)
-    except:
+    except FileNotFoundError:
+        ddf = None
+    except Exception as e:
+        system.logger.warning(f"Could not read {ddf_file}: {type(e).__name__}: {e}")
         ddf = None
     try:
         ddf_query = gbfs.query_station_status(system['url'])
@@ -123,7 +126,10 @@ def update_free_bike_status_raw(system):
     bdf_file = f"{system.data_path}/raw.free_bike.parquet"
     try:
         bdf = pd.read_parquet(bdf_file)
-    except:
+    except FileNotFoundError:
+        bdf = None
+    except Exception as e:
+        system.logger.warning(f"Could not read {bdf_file}: {type(e).__name__}: {e}")
         bdf = None
     try:
         bdf_query = gbfs.query_free_bike_status(system['url'])
@@ -278,7 +284,10 @@ def update_trips(system, feed_type, save_temp_data=False):
     # Add rows to measurements table
     try:
         thdf_historical = load_parquet(system, year_tag, feed_type)
-    except:
+    except FileNotFoundError:
+        thdf_historical = None
+    except Exception as e:
+        system.logger.warning(f"Could not load historical {feed_type} parquet for {year_tag}: {type(e).__name__}: {e}")
         thdf_historical = None
 
     thdf = pd.concat([thdf_historical, thdf])

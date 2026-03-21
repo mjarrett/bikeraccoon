@@ -84,7 +84,7 @@ def _handle_feed_alerts(systems, results, failure_threshold, smtp_config, logger
             else:
                 n = system.get(key_failures, 0) + 1
                 system[key_failures] = n
-                logger.warning(f"{system['name']} {feed} feed failure: {result.get(feed + '_error')}")
+                logger.warning(f"{system['name']} {feed} feed failure ({n} consecutive, alert at {failure_threshold}): {result.get(feed + '_error')}")
                 if n >= failure_threshold and not system.get(key_alerted) and smtp_config:
                     try:
                         send_alert_email(
