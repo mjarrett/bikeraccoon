@@ -53,7 +53,7 @@ jobs:
             systemctl is-active --quiet br-api || (journalctl -u br-api -n 20 --no-pager && exit 1)
 
   deploy-prod:
-    needs: test
+    needs: [test, deploy-staging]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     environment: br-prod
