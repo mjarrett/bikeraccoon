@@ -58,6 +58,8 @@ def update_system(system):
 
 def _handle_feed_alerts(systems, results, failure_threshold, smtp_config, logger):
     """Track consecutive failures per system/feed and send alert/recovery emails."""
+    import socket
+    hostname = socket.gethostname()
     for system, result in zip(systems, results):
         for feed in ('station', 'free_bike'):
             ok = result.get(feed)
@@ -74,8 +76,8 @@ def _handle_feed_alerts(systems, results, failure_threshold, smtp_config, logger
                         try:
                             send_alert_email(
                                 smtp_config,
-                                subject=f"[bikeraccoon] RECOVERED: {system['name']} ({feed})",
-                                body=f"System '{system['name']}' ({feed} feed) is processing normally again.",
+                                subject=f"[bikeraccoon] RECOVERED: {system['name']} ({feed}) [{hostname}]",
+                                body=f"System '{system['name']}' ({feed} feed) is processing normally again.\n\nServer: {hostname}",
                             )
                         except Exception as e:
                             logger.warning(f"Failed to send recovery email for {system['name']}: {e}")
@@ -89,10 +91,11 @@ def _handle_feed_alerts(systems, results, failure_threshold, smtp_config, logger
                     try:
                         send_alert_email(
                             smtp_config,
-                            subject=f"[bikeraccoon] Feed failure: {system['name']} ({feed})",
+                            subject=f"[bikeraccoon] Feed failure: {system['name']} ({feed}) [{hostname}]",
                             body=(
                                 f"System '{system['name']}' has had {n} consecutive failures "
                                 f"on the {feed} feed.\n\nLast error:\n{result.get(feed + '_error')}"
+                                f"\n\nServer: {hostname}"
                             ),
                         )
                         system[key_alerted] = True
