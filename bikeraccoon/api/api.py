@@ -11,6 +11,7 @@ import pytz
 import datetime as dt
 import itertools
 import os
+import pathlib
 import requests
 import pyarrow.parquet as pq
 
@@ -106,6 +107,29 @@ def get_activity():
 
     res = get_trips(t1, t2, sys_name, feed_type, station_id, vehicle_type_id, frequency)
     return res
+
+
+@app.route('/status')
+def get_status():
+    stale_threshold = dt.timedelta(minutes=5)
+    now = dt.datetime.now(dt.timezone.utc)
+    systems = []
+    for path in sorted(pathlib.Path('./tracker-data').glob('*/system.parquet')):
+        try:
+            row = {k: v[0] for k, v in pq.read_table(path).to_pydict().items()}
+            latest = row.get('latest_update')
+            if latest is not None and latest.tzinfo is None:
+                latest = latest.replace(tzinfo=dt.timezone.utc)
+            stale = latest is None or (now - latest) > stale_threshold
+            systems.append({
+                'name': row.get('name'),
+                'last_update': latest.isoformat() if latest else None,
+                'stale': stale,
+            })
+        except Exception:
+            pass
+    active = bool(systems) and any(not s['stale'] for s in systems)
+    return jsonify({'active': active, 'systems': systems})
 
 
 @app.route('/gbfs', methods=['GET'])

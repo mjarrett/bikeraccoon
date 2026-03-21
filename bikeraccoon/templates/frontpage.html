@@ -53,6 +53,31 @@
       color: #a0aec0;
     }
 
+    .tracker-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      margin-top: 0.6rem;
+      margin-left: 0.5rem;
+      padding: 0.25rem 0.75rem;
+      background: #2d3748;
+      border: 1px solid #4a5568;
+      border-radius: 9999px;
+      font-size: 0.8rem;
+      color: #a0aec0;
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #4a5568;
+      flex-shrink: 0;
+    }
+
+    .status-dot.active { background: #68d391; }
+    .status-dot.inactive { background: #fc8181; }
+
     main {
       max-width: 860px;
       margin: 0 auto;
@@ -205,6 +230,10 @@
   <h1>Bike<span>Raccoon</span> API</h1>
   <p>Estimated bikeshare trip data derived from real-time GBFS feeds.</p>
   <span class="badge">v2.0</span>
+  <span class="tracker-status" id="tracker-status">
+    <span class="status-dot" id="status-dot"></span>
+    <span id="status-text">checking tracker…</span>
+  </span>
 </header>
 
 <main>
@@ -320,6 +349,28 @@
   const el = document.getElementById('activity-example');
   el.href = url;
   el.textContent = url;
+
+  fetch('/status')
+    .then(r => r.json())
+    .then(data => {
+      const dot = document.getElementById('status-dot');
+      const text = document.getElementById('status-text');
+      if (data.active) {
+        dot.classList.add('active');
+        const latest = data.systems
+          .filter(s => s.last_update)
+          .map(s => new Date(s.last_update))
+          .sort((a, b) => b - a)[0];
+        const ago = latest ? Math.round((Date.now() - latest) / 60000) : null;
+        text.textContent = ago !== null ? `tracker active · ${ago}m ago` : 'tracker active';
+      } else {
+        dot.classList.add('inactive');
+        text.textContent = 'tracker inactive';
+      }
+    })
+    .catch(() => {
+      document.getElementById('status-text').textContent = 'tracker status unavailable';
+    });
 </script>
 </body>
 </html>
