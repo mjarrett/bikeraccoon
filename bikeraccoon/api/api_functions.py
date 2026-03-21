@@ -104,9 +104,7 @@ def get_trips(t1, t2, sys_name, feed_type, station_id, vehicle_type_id, frequenc
            {"GROUP BY" if groupby != "" else ""} {groupby}
            {orderby}
            '''
-    print(query_text)
     qry = duckdb.query(query_text)
-    print(qry.fetchall()[0])
     # -- Convert to dict
     res = [{k: v for k, v in zip(['station_id', 'vehicle_type_id', 'datetime', 'trips', 'returns'], x)}
            for x in qry.fetchall()]

@@ -41,7 +41,7 @@ class GBFSSystem(UserDict):
             self.logger.info(f'Setting GBFS source URL: {new_url}')
             return new_url
         except Exception as e:
-            print(e)
+            self.logger.warning(f"Failed to get GBFS URL: {e}")
             return
 
     def get_system_time(self):
@@ -78,12 +78,13 @@ def setup_logger(name, log_path, log_name):
         handler = TimedRotatingFileHandler(log_file,
                                            when="d",
                                            interval=1,
-                                           backupCount=5)
+                                           backupCount=14)
 
         handler.setFormatter(formatter)
         logger.addHandler(handler)
 
     streamhandler = logging.StreamHandler()
+    streamhandler.setLevel(logging.INFO)
     streamhandler.setFormatter(formatter)
     logger.addHandler(streamhandler)
     return logger
@@ -109,7 +110,7 @@ def update_station_status_raw(system):
         ddf_query['datetime'] = ddf_query['datetime'].dt.tz_convert(system['tz'])
         ddf = pd.concat([ddf, ddf_query])
     except Exception as e:
-        system.logger.debug(f"gbfs query error, skipping stations_raw db update: {e}")
+        system.logger.warning(f"gbfs query error, skipping stations_raw db update (url={system.get('url')}): {type(e).__name__}: {e}")
         return False, str(e)
 
     ddf.to_parquet(ddf_file, index=False)
@@ -129,7 +130,7 @@ def update_free_bike_status_raw(system):
         bdf_query['datetime'] = bdf_query['datetime'].dt.tz_convert(system['tz'])
         bdf = pd.concat([bdf, bdf_query])
     except Exception as e:
-        system.logger.debug(f"gbfs query error, skipping free_bikes_raw db update: {e}")
+        system.logger.warning(f"gbfs query error, skipping free_bikes_raw db update (url={system.get('url')}): {type(e).__name__}: {e}")
         return False, str(e)
 
     bdf.to_parquet(bdf_file, index=False)
@@ -261,7 +262,7 @@ def update_trips(system, feed_type, save_temp_data=False):
             ddf = pd.read_parquet(f"{system.data_path}/raw.station.parquet")
             thdf = make_station_trips(ddf)
         except Exception as e:
-            system.logger.debug(f"Skipping station trips update: {e}")
+            system.logger.warning(f"Skipping station trips update (file={system.data_path}/raw.station.parquet): {type(e).__name__}: {e}")
             return
 
     elif feed_type == 'free_bike':
@@ -270,7 +271,7 @@ def update_trips(system, feed_type, save_temp_data=False):
             bdf = pd.read_parquet(f"{system.data_path}/raw.free_bike.parquet")
             thdf = make_free_bike_trips(bdf)
         except Exception as e:
-            system.logger.debug(f"Skipping free_bike trips update: {e}")
+            system.logger.warning(f"Skipping free_bike trips update (file={system.data_path}/raw.free_bike.parquet): {type(e).__name__}: {e}")
             return
 
     year_tag = thdf['datetime'].iloc[0].strftime('%Y')

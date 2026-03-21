@@ -6,52 +6,58 @@ import timeout_decorator
 import ssl
 from time import sleep
 
+_REQUEST_TIMEOUT = 15
+
 
 def check_gbfs_url(sys_url):
     try:
-        requests.get(sys_url).json()['data']
+        requests.get(sys_url, timeout=_REQUEST_TIMEOUT).json()['data']
         return True
     except:
         return False
 
 
+def _lookup_feed(sys_url, feed_name):
+    r = requests.get(sys_url, timeout=_REQUEST_TIMEOUT)
+    r.raise_for_status()
+    data = r.json()
+    feeds = data['data']['en']['feeds']
+    matches = [x for x in feeds if x['name'] == feed_name]
+    if not matches:
+        raise ValueError(f"'{feed_name}' feed not found in GBFS autodiscovery at {sys_url}")
+    return matches[0]['url']
+
+
 def get_station_status_url(sys_url):
-    data = requests.get(sys_url).json()
-    return [x for x in data['data']['en']['feeds'] if x['name'] == 'station_status'][0]['url']
+    return _lookup_feed(sys_url, 'station_status')
 
 
 def get_station_info_url(sys_url):
-    data = requests.get(sys_url).json()
-    return [x for x in data['data']['en']['feeds'] if x['name'] == 'station_information'][0]['url']
+    return _lookup_feed(sys_url, 'station_information')
 
 
 def get_system_info_url(sys_url):
-    data = requests.get(sys_url).json()
-    return [x for x in data['data']['en']['feeds'] if x['name'] == 'system_information'][0]['url']
+    return _lookup_feed(sys_url, 'system_information')
 
 
 def get_free_bike_url(sys_url):
-    data = requests.get(sys_url).json()
-    return [x for x in data['data']['en']['feeds'] if x['name'] == 'free_bike_status'][0]['url']
+    return _lookup_feed(sys_url, 'free_bike_status')
 
 
 def get_vehicle_url(sys_url):
-    data = requests.get(sys_url).json()
-    return [x for x in data['data']['en']['feeds'] if x['name'] == 'vehicle_status'][0]['url']
+    return _lookup_feed(sys_url, 'vehicle_status')
 
 
 def get_vehicle_types_url(sys_url):
-    data = requests.get(sys_url).json()
-    return [x for x in data['data']['en']['feeds'] if x['name'] == 'vehicle_types'][0]['url']
+    return _lookup_feed(sys_url, 'vehicle_types')
 
 
 @timeout_decorator.timeout(30)
 def query_system_info(sys_url):
     url = get_system_info_url(sys_url)
-
-    data = requests.get(url).json()
-
-    return data
+    r = requests.get(url, timeout=_REQUEST_TIMEOUT)
+    r.raise_for_status()
+    return r.json()
 
 
 @timeout_decorator.timeout(30)
@@ -61,7 +67,9 @@ def query_vehicle_types(sys_url):
     """
 
     url = get_vehicle_types_url(sys_url)
-    data = requests.get(url).json()
+    r = requests.get(url, timeout=_REQUEST_TIMEOUT)
+    r.raise_for_status()
+    data = r.json()
 
     df = pd.DataFrame(data['data']['vehicle_types'])
 
@@ -99,13 +107,17 @@ def query_station_status(sys_url):
 
     url = get_station_status_url(sys_url)
 
-    data = requests.get(url).json()
+    r = requests.get(url, timeout=_REQUEST_TIMEOUT)
+    r.raise_for_status()
+    data = r.json()
 
     # if data returns string, it might be an error message. wait 2 seconds and try again
     # this was added to handle HOPR rate limit
     if isinstance(data, str):
         sleep(2)
-        data = requests.get(url).json()
+        r = requests.get(url, timeout=_REQUEST_TIMEOUT)
+        r.raise_for_status()
+        data = r.json()
 
     data = [f(x) for x in data['data']['stations']]  # Reformat if vehicle types are present
     data = [y if 'vehicle_type_id' in y else x for x in data for y in x]  # flatten list
@@ -139,12 +151,12 @@ def query_free_bike_status(sys_url):
     try:
         url = get_free_bike_url(sys_url)
         gbfs_ver = 2
-    except IndexError:
+    except ValueError:
         try:
             url = get_vehicle_url(sys_url)
             gbfs_ver = 3
-        except IndexError:
-            raise ValueError("Free bikes JSON feed not available")
+        except ValueError:
+            raise ValueError(f"Free bikes JSON feed not available at {sys_url}")
 
     if gbfs_ver == 2:
         bikes_slug = 'bikes'
@@ -154,14 +166,16 @@ def query_free_bike_status(sys_url):
         bikes_slug = 'vehicles'
         bike_id_slug = 'vehicle_id'
 
-    data = requests.get(url).json()
+    r = requests.get(url, timeout=_REQUEST_TIMEOUT)
+    r.raise_for_status()
+    data = r.json()
 
     try:
         df = pd.DataFrame(data['data'][bikes_slug])
     except KeyError:
         df = pd.DataFrame(data[bikes_slug])
 
-    if 'vehicle_type_id' not in data['data'][bikes_slug][0]:
+    if not data['data'][bikes_slug] or 'vehicle_type_id' not in data['data'][bikes_slug][0]:
         df['vehicle_type_id'] = ""
 
     if 'lat' not in df.columns or 'lon' not in df.columns:
@@ -198,7 +212,9 @@ def query_station_info(sys_url):
     """
     url = get_station_info_url(sys_url)
 
-    data = requests.get(url).json()
+    r = requests.get(url, timeout=_REQUEST_TIMEOUT)
+    r.raise_for_status()
+    data = r.json()
 
     try:
         df = pd.DataFrame(data['data']['stations'])

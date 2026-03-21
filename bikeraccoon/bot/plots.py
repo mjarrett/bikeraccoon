@@ -11,6 +11,9 @@ import pandas as pd
 
 from bikeraccoon.bot.weather import *
 
+import logging
+logger = logging.getLogger(__name__)
+
 
 def plot_hourly_trips(api, kind, t1, t2, ax=None, palette=None):
     sns.set(style='ticks', palette=palette)
@@ -158,8 +161,7 @@ def plot_daily_weather(api, date1, date2, ax=None):
     try:
         df = get_weather_range(api, 'daily', date1, date2)
     except Exception as e:
-        print(f"get_weather_range(api,'daily',{date1},{date2}) failed with the following exception")
-        print(e)
+        logger.warning(f"get_weather_range(api,'daily',{date1},{date2}) failed: {e}")
         return None
 
     if ax is None:
