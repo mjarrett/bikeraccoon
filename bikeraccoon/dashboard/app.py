@@ -1,3 +1,4 @@
+import os
 import dash
 from dash import dcc, html, Input, Output
 import plotly.graph_objects as go
@@ -7,9 +8,12 @@ from urllib.parse import parse_qs
 
 import bikeraccoon as br
 
+_env = os.environ.get('BR_ENV', '')
+_title = f'Bikeraccoon Dashboard [{_env}]' if _env and _env != 'PROD' else 'Bikeraccoon Dashboard'
+
 app = dash.Dash(
     __name__,
-    title='Bikeraccoon Dashboard',
+    title=_title,
     suppress_callback_exceptions=True,
 )
 server = app.server

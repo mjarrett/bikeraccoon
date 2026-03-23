@@ -89,10 +89,21 @@
     }
 
     .empty { color: #4a5568; font-style: italic; padding: 1rem 0.75rem; }
+
+    .env-banner {
+      background: #744210;
+      color: #fefcbf;
+      text-align: center;
+      padding: 0.4rem 1rem;
+      font-size: 0.85rem;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
   </style>
 </head>
 <body>
 
+{% if env and env != 'PROD' %}<div class="env-banner">{{ env }} environment</div>{% endif %}
 <header>
   <h1>Bike<span>Raccoon</span> Admin</h1>
 </header>

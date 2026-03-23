@@ -217,6 +217,16 @@
     .license-card h3 { font-size: 0.9rem; color: #a0aec0; margin-bottom: 0.4rem; }
     .license-card p { font-size: 0.875rem; margin: 0; }
 
+    .env-banner {
+      background: #744210;
+      color: #fefcbf;
+      text-align: center;
+      padding: 0.4rem 1rem;
+      font-size: 0.85rem;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+    }
+
     @media (max-width: 600px) {
       header h1 { font-size: 1.75rem; }
       .license-grid { grid-template-columns: 1fr; }
@@ -226,6 +236,7 @@
 </head>
 <body>
 
+{% if env and env != 'PROD' %}<div class="env-banner">{{ env }} environment</div>{% endif %}
 <header>
   <h1>Bike<span>Raccoon</span> API</h1>
   <p>Estimated bikeshare trip data derived from real-time GBFS feeds.</p>

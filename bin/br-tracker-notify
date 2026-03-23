@@ -29,7 +29,9 @@ def should_notify():
 
 def send_email():
     msg = EmailMessage()
-    msg['Subject'] = 'br-tracker restarted'
+    env = os.environ.get('BR_ENV', '')
+    env_tag = f'[{env}] ' if env else ''
+    msg['Subject'] = f'{env_tag}br-tracker restarted'
     msg['From'] = os.environ['BR_SMTP_FROM']
     msg['To'] = os.environ['BR_SMTP_TO']
     msg.set_content(f"br-tracker systemd service on {socket.gethostname()} restarted")

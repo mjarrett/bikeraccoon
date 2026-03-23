@@ -1,3 +1,4 @@
+import os
 import time
 import datetime as dt
 import pandas as pd
@@ -60,6 +61,8 @@ def _handle_feed_alerts(systems, results, failure_threshold, smtp_config, logger
     """Track consecutive failures per system/feed and send alert/recovery emails."""
     import socket
     hostname = socket.gethostname()
+    env = os.environ.get('BR_ENV', '')
+    env_tag = f'[{env}] ' if env else ''
     for system, result in zip(systems, results):
         for feed in ('station', 'free_bike'):
             ok = result.get(feed)
@@ -76,7 +79,7 @@ def _handle_feed_alerts(systems, results, failure_threshold, smtp_config, logger
                         try:
                             send_alert_email(
                                 smtp_config,
-                                subject=f"[bikeraccoon] RECOVERED: {system['name']} ({feed}) [{hostname}]",
+                                subject=f"[bikeraccoon] {env_tag}RECOVERED: {system['name']} ({feed}) [{hostname}]",
                                 body=f"System '{system['name']}' ({feed} feed) is processing normally again.\n\nServer: {hostname}",
                             )
                         except Exception as e:
@@ -91,7 +94,7 @@ def _handle_feed_alerts(systems, results, failure_threshold, smtp_config, logger
                     try:
                         send_alert_email(
                             smtp_config,
-                            subject=f"[bikeraccoon] Feed failure: {system['name']} ({feed}) [{hostname}]",
+                            subject=f"[bikeraccoon] {env_tag}Feed failure: {system['name']} ({feed}) [{hostname}]",
                             body=(
                                 f"System '{system['name']}' has had {n} consecutive failures "
                                 f"on the {feed} feed.\n\nLast error:\n{result.get(feed + '_error')}"
@@ -141,7 +144,8 @@ def tracker(systems_file='systems.json', log_path=None, data_path='tracker-data'
             update_stations(system)
             update_vehicle_types(system)
 
-    logger.info("Daemon started successfully")
+    env = os.environ.get('BR_ENV', '')
+    logger.info(f"Daemon started successfully{f' [{env}]' if env else ''}")
 
     last_summary_date = None
 
@@ -181,9 +185,11 @@ def tracker(systems_file='systems.json', log_path=None, data_path='tracker-data'
                                     system[k] = meta[k]
                         except Exception:
                             pass
+                    env = os.environ.get('BR_ENV', '')
+                    env_tag = f'[{env}] ' if env else ''
                     send_alert_email(
                         smtp_config,
-                        subject=f"[bikeraccoon] Daily summary — {today}",
+                        subject=f"[bikeraccoon] {env_tag}Daily summary — {today}",
                         body=build_daily_summary(systems),
                     )
                     logger.info("Daily summary email sent")

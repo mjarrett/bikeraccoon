@@ -33,6 +33,7 @@ CORS(app)  # Prevents CORS errors
 
 BR_DB_PATH = os.environ.get('BR_DB_PATH', './api.db')
 BR_ADMIN_KEY = os.environ.get('BR_ADMIN_KEY', '')
+BR_ENV = os.environ.get('BR_ENV', '')
 
 apidb.init_db(BR_DB_PATH)
 
@@ -91,7 +92,7 @@ def favicon():
 
 @app.route('/')
 def default():
-    return render_template("frontpage.html")
+    return render_template("frontpage.html", env=BR_ENV)
 
 
 @app.route('/tests')
@@ -110,7 +111,7 @@ def admin():
             new_key = apidb.create_key(BR_DB_PATH, name=name, email=email, description=description)
     keys = apidb.get_keys_with_stats(BR_DB_PATH)
     recent = apidb.get_recent_requests(BR_DB_PATH)
-    return render_template("admin.html", keys=keys, recent=recent, new_key=new_key)
+    return render_template("admin.html", keys=keys, recent=recent, new_key=new_key, env=BR_ENV)
 
 
 @app.route('/systems', methods=['GET'])
@@ -197,7 +198,7 @@ def get_status():
         except Exception:
             pass
     active = bool(systems) and any(not s['stale'] for s in systems)
-    return jsonify({'active': active, 'systems': systems})
+    return jsonify({'active': active, 'env': BR_ENV, 'systems': systems})
 
 
 @app.route('/gbfs', methods=['GET'])
