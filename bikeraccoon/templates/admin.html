@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BikeRaccoon Admin</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      line-height: 1.6;
+    }
+
+    header {
+      background: linear-gradient(135deg, #1a202c 0%, #2d3748 100%);
+      border-bottom: 1px solid #2d3748;
+      padding: 1.5rem 2rem;
+    }
+
+    header h1 { font-size: 1.4rem; font-weight: 700; color: #fff; }
+    header h1 span { color: #f6ad55; }
+
+    main {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 2rem 1.5rem 4rem;
+    }
+
+    section { margin-bottom: 3rem; }
+
+    h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #718096;
+      margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid #2d3748;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+    }
+
+    th {
+      text-align: left;
+      padding: 0.5rem 0.75rem;
+      background: #1a202c;
+      color: #a0aec0;
+      font-weight: 600;
+      border-bottom: 1px solid #2d3748;
+    }
+
+    td {
+      padding: 0.5rem 0.75rem;
+      border-bottom: 1px solid #1a202c;
+      color: #cbd5e0;
+      font-variant-numeric: tabular-nums;
+    }
+
+    tr:hover td { background: #1a202c; }
+
+    .inactive { color: #718096; }
+
+    .pill {
+      display: inline-block;
+      padding: 0.1rem 0.5rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 600;
+    }
+
+    .pill-green { background: #1c4532; color: #68d391; }
+    .pill-gray  { background: #2d3748; color: #718096; }
+
+    .status-ok   { color: #68d391; }
+    .status-err  { color: #fc8181; }
+
+    code {
+      font-family: monospace;
+      font-size: 0.8rem;
+      color: #90cdf4;
+    }
+
+    .empty { color: #4a5568; font-style: italic; padding: 1rem 0.75rem; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Bike<span>Raccoon</span> Admin</h1>
+</header>
+
+<main>
+
+  <section>
+    <h2>Generate API Key</h2>
+
+    {% if new_key %}
+    <div style="background:#1c4532;border:1px solid #276749;border-radius:8px;padding:1rem 1.25rem;margin-bottom:1.5rem;">
+      <p style="color:#9ae6b4;margin-bottom:0.5rem;font-weight:600;">Key generated — copy it now, it won't be shown again.</p>
+      <code style="font-size:0.9rem;color:#e2e8f0;word-break:break-all;">{{ new_key }}</code>
+    </div>
+    {% endif %}
+
+    <form method="post" style="display:flex;gap:0.75rem;flex-wrap:wrap;align-items:flex-end;">
+      <div style="display:flex;flex-direction:column;gap:0.3rem;">
+        <label style="font-size:0.8rem;color:#a0aec0;">Name <span style="color:#fc8181">*</span></label>
+        <input name="name" required placeholder="e.g. Jane Smith"
+               style="background:#1a202c;border:1px solid #4a5568;border-radius:6px;padding:0.4rem 0.75rem;color:#e2e8f0;font-size:0.875rem;">
+      </div>
+      <div style="display:flex;flex-direction:column;gap:0.3rem;">
+        <label style="font-size:0.8rem;color:#a0aec0;">Email</label>
+        <input name="email" type="email" placeholder="jane@example.com"
+               style="background:#1a202c;border:1px solid #4a5568;border-radius:6px;padding:0.4rem 0.75rem;color:#e2e8f0;font-size:0.875rem;">
+      </div>
+      <div style="display:flex;flex-direction:column;gap:0.3rem;">
+        <label style="font-size:0.8rem;color:#a0aec0;">Description</label>
+        <input name="description" placeholder="e.g. Research project"
+               style="background:#1a202c;border:1px solid #4a5568;border-radius:6px;padding:0.4rem 0.75rem;color:#e2e8f0;font-size:0.875rem;width:220px;">
+      </div>
+      <button type="submit"
+              style="background:#2b6cb0;border:none;border-radius:6px;padding:0.45rem 1.25rem;color:#fff;font-size:0.875rem;cursor:pointer;">
+        Generate
+      </button>
+    </form>
+  </section>
+
+  <section>
+    <h2>API Keys</h2>
+    {% if keys %}
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Email</th>
+          <th>Description</th>
+          <th>Created</th>
+          <th>Status</th>
+          <th>Total requests</th>
+          <th>Last 7 days</th>
+          <th>Last seen</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for k in keys %}
+        <tr class="{{ '' if k.active else 'inactive' }}">
+          <td>{{ k.name }}</td>
+          <td>{{ k.email or '—' }}</td>
+          <td>{{ k.description or '—' }}</td>
+          <td>{{ k.created[:10] }}</td>
+          <td>
+            {% if k.active %}
+              <span class="pill pill-green">active</span>
+            {% else %}
+              <span class="pill pill-gray">inactive</span>
+            {% endif %}
+          </td>
+          <td>{{ k.total_requests or 0 }}</td>
+          <td>{{ k.requests_7d or 0 }}</td>
+          <td>{{ k.last_seen[:16] if k.last_seen else '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="empty">No API keys yet.</p>
+    {% endif %}
+  </section>
+
+  <section>
+    <h2>Recent Requests</h2>
+    {% if recent %}
+    <table>
+      <thead>
+        <tr>
+          <th>Time</th>
+          <th>Key</th>
+          <th>Endpoint</th>
+          <th>Query</th>
+          <th>Status</th>
+          <th>ms</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in recent %}
+        <tr>
+          <td>{{ r.ts[:19] }}</td>
+          <td>{{ r.name or '—' }}</td>
+          <td><code>{{ r.endpoint }}</code></td>
+          <td><code>{{ r.query_str or '' }}</code></td>
+          <td class="{{ 'status-ok' if r.status_code and r.status_code < 400 else 'status-err' }}">
+            {{ r.status_code }}
+          </td>
+          <td>{{ r.response_ms }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+    <p class="empty">No requests logged yet.</p>
+    {% endif %}
+  </section>
+
+</main>
+
+</body>
+</html>

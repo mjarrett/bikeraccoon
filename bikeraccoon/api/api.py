@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 from flask_cors import CORS
-from flask import (Flask, request, make_response,
+from flask import (Flask, request, make_response, g,
                    send_from_directory, render_template, jsonify)
 
 import json
@@ -12,10 +12,13 @@ import datetime as dt
 import itertools
 import os
 import pathlib
+import time
 import requests
+from urllib.parse import urlencode, parse_qsl
 import pyarrow.parquet as pq
 
 from .api_functions import *
+from . import db as apidb
 
 from .. import gbfs
 
@@ -27,6 +30,57 @@ app.json = BRJSONProvider(app)
 app.json.compact = False
 
 CORS(app)  # Prevents CORS errors
+
+BR_DB_PATH = os.environ.get('BR_DB_PATH', './api.db')
+BR_ADMIN_KEY = os.environ.get('BR_ADMIN_KEY', '')
+
+apidb.init_db(BR_DB_PATH)
+
+NO_AUTH_PATHS = {'/', '/status', '/favicon.ico', '/tests', '/systems', '/stations', '/vehicles'}
+
+
+@app.before_request
+def authenticate():
+    if request.path in NO_AUTH_PATHS:
+        g.key_id = None
+        return
+
+    if request.path.startswith('/admin'):
+        auth = request.authorization
+        if not BR_ADMIN_KEY or not auth or auth.password != BR_ADMIN_KEY:
+            return make_response('Unauthorized', 401,
+                                 {'WWW-Authenticate': 'Basic realm="BikeRaccoon Admin"'})
+        g.key_id = None
+        return
+
+    key_str = request.args.get('key')
+    if not key_str:
+        return jsonify({'error': 'Missing key parameter'}), 401
+
+    key_row = apidb.lookup_key(BR_DB_PATH, key_str)
+    if key_row is None:
+        return jsonify({'error': 'Invalid or inactive API key'}), 401
+
+    g.key_id = key_row['id']
+    g.start_time = time.monotonic()
+
+
+@app.after_request
+def log_request(response):
+    key_id = getattr(g, 'key_id', None)
+    if key_id is None:
+        return response
+    response_ms = int((time.monotonic() - g.start_time) * 1000)
+    qs = {k: v for k, v in parse_qsl(request.query_string.decode()) if k != 'key'}
+    apidb.log_request(
+        BR_DB_PATH,
+        key_id=key_id,
+        endpoint=request.path,
+        query_str=urlencode(qs),
+        status_code=response.status_code,
+        response_ms=response_ms,
+    )
+    return response
 
 
 @app.route('/favicon.ico')
@@ -43,6 +97,20 @@ def default():
 @app.route('/tests')
 def tests():
     return render_template("tests.html")
+
+
+@app.route('/admin', methods=['GET', 'POST'])
+def admin():
+    new_key = None
+    if request.method == 'POST':
+        name = request.form.get('name', '').strip()
+        email = request.form.get('email', '').strip() or None
+        description = request.form.get('description', '').strip() or None
+        if name:
+            new_key = apidb.create_key(BR_DB_PATH, name=name, email=email, description=description)
+    keys = apidb.get_keys_with_stats(BR_DB_PATH)
+    recent = apidb.get_recent_requests(BR_DB_PATH)
+    return render_template("admin.html", keys=keys, recent=recent, new_key=new_key)
 
 
 @app.route('/systems', methods=['GET'])

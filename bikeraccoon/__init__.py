@@ -18,11 +18,19 @@ class APIBase():
 
 
 class LiveAPI(APIBase):
-    def __init__(self, system, echo=False):
+    def __init__(self, system, api_key=None, echo=False):
         super().__init__()
         self.system = system
+        self.api_key = api_key
         self.info = self.get_system_info()
         self.echo = echo
+
+    def _build_url(self, path):
+        url = self.api_base_url + path
+        if self.api_key:
+            sep = '&' if '?' in path else '?'
+            url += f'{sep}key={self.api_key}'
+        return url
 
     def get_system_info(self):
         systems = get_systems()
@@ -50,8 +58,8 @@ class LiveAPI(APIBase):
 
         query_url = f'/activity?system={self.system}&start={t1}&end={t2}&frequency={freq}{station_string}&feed={feed}{vehicle_string}'
         if self.echo:
-            print(self.api_base_url + query_url)
-        df = self._to_df(self.api_base_url + query_url)
+            print(self._build_url(query_url))
+        df = self._to_df(self._build_url(query_url))
 
         if len(df) == 0:
             return None
@@ -61,8 +69,8 @@ class LiveAPI(APIBase):
     def get_stations(self):
         query_url = f"/stations?system={self.system}"
         if self.echo:
-            print(self.api_base_url + query_url)
-        r = requests.get(APIBase().api_base_url + query_url)
+            print(self._build_url(query_url))
+        r = requests.get(self._build_url(query_url))
         df = pd.DataFrame(r.json()['data'])
 
         if len(df) == 0:
