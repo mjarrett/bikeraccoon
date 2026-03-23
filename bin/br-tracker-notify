@@ -1,0 +1,57 @@
+#!/usr/bin/env python3
+"""
+Send a failure notification email when br-tracker restarts.
+Reads SMTP config from BR_SMTP_* environment variables.
+Rate-limited to one email per 24 hours.
+"""
+
+import os
+import smtplib
+import socket
+import sys
+import time
+from email.message import EmailMessage
+from pathlib import Path
+
+STAMP = Path('/var/lib/br-tracker/last-notify')
+THROTTLE = 86400  # seconds
+
+
+def should_notify():
+    if STAMP.exists():
+        try:
+            if time.time() - int(STAMP.read_text().strip()) < THROTTLE:
+                return False
+        except ValueError:
+            pass
+    return True
+
+
+def send_email():
+    msg = EmailMessage()
+    msg['Subject'] = 'br-tracker restarted'
+    msg['From'] = os.environ['BR_SMTP_FROM']
+    msg['To'] = os.environ['BR_SMTP_TO']
+    msg.set_content(f"br-tracker systemd service on {socket.gethostname()} restarted")
+
+    with smtplib.SMTP(os.environ['BR_SMTP_HOST'], int(os.environ.get('BR_SMTP_PORT', 587))) as smtp:
+        if os.environ.get('BR_SMTP_TLS', 'true').lower() == 'true':
+            smtp.starttls()
+        if os.environ.get('BR_SMTP_USERNAME'):
+            smtp.login(os.environ['BR_SMTP_USERNAME'], os.environ['BR_SMTP_PASSWORD'])
+        smtp.send_message(msg)
+
+
+if not os.environ.get('BR_SMTP_HOST'):
+    sys.exit(0)
+
+if not should_notify():
+    sys.exit(0)
+
+try:
+    send_email()
+    STAMP.parent.mkdir(parents=True, exist_ok=True)
+    STAMP.write_text(str(int(time.time())))
+except Exception as e:
+    print(f"br-tracker-notify: {e}", file=sys.stderr)
+    sys.exit(1)

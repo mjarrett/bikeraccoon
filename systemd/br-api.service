@@ -1,0 +1,13 @@
+[Unit]
+Description=br-tracker API
+After=network.target
+
+[Service]
+User=__DEPLOY_USER__
+WorkingDirectory=/srv/br-tracker
+EnvironmentFile=/srv/br-tracker/.env
+ExecStart=/srv/br-tracker/.venv/bin/gunicorn -w 2 -b 127.0.0.1:8000 bikeraccoon.api:app
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

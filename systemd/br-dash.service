@@ -1,0 +1,13 @@
+[Unit]
+Description=br-tracker Dashboard
+After=network.target
+
+[Service]
+User=__DEPLOY_USER__
+WorkingDirectory=/srv/br-tracker
+EnvironmentFile=/srv/br-tracker/.env
+ExecStart=/srv/br-tracker/.venv/bin/gunicorn -w 1 -b 127.0.0.1:8050 bikeraccoon.dashboard:server
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

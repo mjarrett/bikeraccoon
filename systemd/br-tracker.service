@@ -1,0 +1,17 @@
+[Unit]
+Description=Bike Raccoon Tracker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__DEPLOY_USER__
+WorkingDirectory=/srv/br-tracker
+EnvironmentFile=/srv/br-tracker/.env
+ExecStart=/srv/br-tracker/.venv/bin/python /srv/bikeraccoon/bin/tracker.py
+Restart=on-failure
+ExecStopPost=/bin/bash -c 'if [ $EXIT_STATUS != 0 ]; then /usr/local/bin/br-tracker-notify; fi'
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

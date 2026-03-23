@@ -1,0 +1,13 @@
+[
+    {
+        "name": "bike_share_toronto",
+        "url": "https://tor.publicbikesystem.net/customer/gbfs/v2/gbfs.json",
+        "gbfs_system_id": "bike_share_toronto",
+        "tz": "America/Toronto",
+        "brand": "Bike Share Toronto",
+        "city": "Toronto",
+        "province": "ON",
+        "country": "CA",
+        "tracking": true
+    }
+]
