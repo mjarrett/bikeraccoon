@@ -5,7 +5,7 @@
 set -euo pipefail
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-DEPLOY_USER="${DEPLOY_USER:-$USER}"
+DEPLOY_USER="${DEPLOY_USER:-${SUDO_USER:-$USER}}"
 BIKERACCOON_REPO="https://github.com/mjarrett/bikeraccoon"
 BIKERACCOON_DIR="/srv/bikeraccoon"
 TRACKER_DIR="/srv/br-tracker"
@@ -68,7 +68,7 @@ fi
 # ── Python virtual environment ────────────────────────────────────────────────
 info "Creating virtual environment at $VENV..."
 sudo -u "$DEPLOY_USER" uv venv --python 3.12 "$VENV"
-sudo -u "$DEPLOY_USER" "$VENV/bin/pip" install -q \
+sudo -u "$DEPLOY_USER" uv --directory $VENV pip install -q \
     -e "$BIKERACCOON_DIR" \
     gunicorn
 
