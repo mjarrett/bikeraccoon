@@ -5,8 +5,8 @@
 set -euo pipefail
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-DEPLOY_USER="${DEPLOY_USER}"
-BIKERACCOON_REPO="${BIKERACCOON_REPO:?Set BIKERACCOON_REPO to the bikeraccoon git URL}"
+DEPLOY_USER="${DEPLOY_USER:-$USER}"
+BIKERACCOON_REPO="https://github.com/mjarrett/bikeraccoon"
 BIKERACCOON_DIR="/srv/bikeraccoon"
 TRACKER_DIR="/srv/br-tracker"
 VENV="$TRACKER_DIR/.venv"
