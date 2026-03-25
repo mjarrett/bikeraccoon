@@ -2,7 +2,7 @@
 
 from flask_cors import CORS
 from flask import (Flask, request, make_response, g,
-                   send_from_directory, render_template, jsonify)
+                   send_from_directory, render_template, jsonify, redirect)
 
 import json
 import hashlib
@@ -34,6 +34,21 @@ CORS(app)  # Prevents CORS errors
 BR_DB_PATH = os.environ.get('BR_DB_PATH', './api.db')
 BR_ADMIN_KEY = os.environ.get('BR_ADMIN_KEY', '')
 BR_ENV = os.environ.get('BR_ENV', '')
+BR_SYSTEMS_FILE = os.environ.get('BR_SYSTEMS_FILE', './systems.json')
+
+
+def _load_systems():
+    try:
+        with open(BR_SYSTEMS_FILE) as f:
+            return json.load(f)
+    except Exception:
+        return []
+
+
+def _save_systems(systems):
+    with open(BR_SYSTEMS_FILE, 'w') as f:
+        json.dump(systems, f, indent=4)
+
 
 apidb.init_db(BR_DB_PATH)
 
@@ -104,14 +119,50 @@ def tests():
 def admin():
     new_key = None
     if request.method == 'POST':
-        name = request.form.get('name', '').strip()
-        email = request.form.get('email', '').strip() or None
-        description = request.form.get('description', '').strip() or None
-        if name:
-            new_key = apidb.create_key(BR_DB_PATH, name=name, email=email, description=description)
+        action = request.form.get('_action')
+
+        if action == 'toggle_system':
+            sys_name = request.form.get('_system', '')
+            systems = _load_systems()
+            for s in systems:
+                if s['name'] == sys_name:
+                    s['tracking'] = not s.get('tracking', False)
+                    break
+            _save_systems(systems)
+            return redirect('/admin')
+
+        elif action == 'edit_system':
+            sys_name = request.form.get('_system', '')
+            systems = _load_systems()
+            for s in systems:
+                if s['name'] == sys_name:
+                    tz = request.form.get('tz', '').strip()
+                    if tz:
+                        s['tz'] = tz
+                    url = request.form.get('url', '').strip()
+                    if url:
+                        s['url'] = url
+                    s['brand'] = request.form.get('brand', '').strip() or None
+                    s['city'] = request.form.get('city', '').strip() or None
+                    s['tracking'] = request.form.get('tracking') == 'on'
+                    s['track_stations'] = request.form.get('track_stations') == 'on'
+                    s['track_free_bikes'] = request.form.get('track_free_bikes') == 'on'
+                    break
+            _save_systems(systems)
+            return redirect('/admin')
+
+        else:
+            name = request.form.get('name', '').strip()
+            email = request.form.get('email', '').strip() or None
+            description = request.form.get('description', '').strip() or None
+            if name:
+                new_key = apidb.create_key(BR_DB_PATH, name=name, email=email, description=description)
+
     keys = apidb.get_keys_with_stats(BR_DB_PATH)
     recent = apidb.get_recent_requests(BR_DB_PATH)
-    return render_template("admin.html", keys=keys, recent=recent, new_key=new_key, env=BR_ENV)
+    systems_data = _load_systems()
+    return render_template("admin.html", keys=keys, recent=recent, new_key=new_key, env=BR_ENV,
+                           systems_data=systems_data)
 
 
 @app.route('/systems', methods=['GET'])

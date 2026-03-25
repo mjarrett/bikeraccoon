@@ -90,6 +90,83 @@
 
     .empty { color: #4a5568; font-style: italic; padding: 1rem 0.75rem; }
 
+    .toggle-btn {
+      border: none;
+      border-radius: 4px;
+      padding: 0.2rem 0.6rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .toggle-on  { background: #1c4532; color: #68d391; }
+    .toggle-off { background: #2d3748; color: #718096; }
+
+    tr.sys-row { cursor: pointer; }
+    tr.sys-row:hover td { background: #1e2533; }
+    tr.sys-row.open td { background: #1a202c; }
+
+    tr.sys-edit-row { display: none; }
+    tr.sys-edit-row.open { display: table-row; }
+
+    .edit-body {
+      padding: 1rem 0.75rem 1.25rem;
+    }
+
+    .edit-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.75rem;
+    }
+
+    .field-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+    }
+
+    .field-group label {
+      font-size: 0.8rem;
+      color: #a0aec0;
+    }
+
+    .field-group input[type="text"],
+    .field-group input:not([type="checkbox"]) {
+      background: #0f1117;
+      border: 1px solid #4a5568;
+      border-radius: 6px;
+      padding: 0.4rem 0.75rem;
+      color: #e2e8f0;
+      font-size: 0.875rem;
+    }
+
+    .checkboxes {
+      grid-column: 1 / -1;
+      display: flex;
+      gap: 2rem;
+      align-items: center;
+      padding-top: 0.25rem;
+    }
+
+    .checkbox-label {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.875rem;
+      color: #cbd5e0;
+      cursor: pointer;
+    }
+
+    .btn-primary {
+      background: #2b6cb0;
+      border: none;
+      border-radius: 6px;
+      padding: 0.45rem 1.25rem;
+      color: #fff;
+      font-size: 0.875rem;
+      cursor: pointer;
+    }
+
     .env-banner {
       background: #744210;
       color: #fefcbf;
@@ -109,6 +186,106 @@
 </header>
 
 <main>
+
+  <section>
+    <h2>Systems</h2>
+    <p style="font-size:0.8rem;color:#718096;margin-bottom:1rem;">
+      Changes are written to <code>systems.json</code> and take effect after the tracker restarts.
+    </p>
+
+    {% if systems_data %}
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Brand</th>
+          <th>City</th>
+          <th>Timezone</th>
+          <th>Tracking</th>
+          <th>Stations</th>
+          <th>Free Bikes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in systems_data %}
+        <tr class="sys-row">
+          <td><code>{{ s.name }}</code></td>
+          <td>{{ s.brand or '—' }}</td>
+          <td>{{ s.city or '—' }}</td>
+          <td>{{ s.tz }}</td>
+          <td>
+            <form method="post" action="/admin" style="display:inline" onclick="event.stopPropagation()">
+              <input type="hidden" name="_action" value="toggle_system">
+              <input type="hidden" name="_system" value="{{ s.name }}">
+              <button type="submit" class="toggle-btn {{ 'toggle-on' if s.tracking else 'toggle-off' }}">
+                {{ 'Enabled' if s.tracking else 'Disabled' }}
+              </button>
+            </form>
+          </td>
+          <td>
+            <span class="pill {{ 'pill-green' if s.get('track_stations', true) else 'pill-gray' }}">
+              {{ 'yes' if s.get('track_stations', true) else 'no' }}
+            </span>
+          </td>
+          <td>
+            <span class="pill {{ 'pill-green' if s.get('track_free_bikes', true) else 'pill-gray' }}">
+              {{ 'yes' if s.get('track_free_bikes', true) else 'no' }}
+            </span>
+          </td>
+        </tr>
+        <tr class="sys-edit-row">
+          <td colspan="7" style="padding:0;border-bottom:1px solid #2d3748;">
+            <div class="edit-body">
+              <form method="post" action="/admin">
+                <input type="hidden" name="_action" value="edit_system">
+                <input type="hidden" name="_system" value="{{ s.name }}">
+                <div class="edit-grid">
+                  <div class="field-group">
+                    <label>Brand</label>
+                    <input name="brand" value="{{ s.brand or '' }}" placeholder="e.g. Bike Share Toronto">
+                  </div>
+                  <div class="field-group">
+                    <label>City</label>
+                    <input name="city" value="{{ s.city or '' }}" placeholder="e.g. Toronto">
+                  </div>
+                  <div class="field-group">
+                    <label>Timezone</label>
+                    <input name="tz" value="{{ s.tz or '' }}" placeholder="e.g. America/Toronto">
+                  </div>
+                  <div class="field-group" style="grid-column: 1 / -1;">
+                    <label>GBFS URL</label>
+                    <input name="url" value="{{ s.url or '' }}" placeholder="https://...">
+                  </div>
+                  <div class="checkboxes">
+                    <label class="checkbox-label">
+                      <input type="checkbox" name="tracking" {{ 'checked' if s.tracking else '' }}>
+                      Tracking enabled
+                    </label>
+                    <label class="checkbox-label">
+                      <input type="checkbox" name="track_stations" {{ 'checked' if s.get('track_stations', true) else '' }}>
+                      Track stations
+                    </label>
+                    <label class="checkbox-label">
+                      <input type="checkbox" name="track_free_bikes" {{ 'checked' if s.get('track_free_bikes', true) else '' }}>
+                      Track free bikes
+                    </label>
+                  </div>
+                </div>
+                <div style="margin-top:1rem;">
+                  <button type="submit" class="btn-primary">Save</button>
+                </div>
+              </form>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+
+    {% else %}
+    <p class="empty">No systems configured.</p>
+    {% endif %}
+  </section>
 
   <section>
     <h2>Generate API Key</h2>
@@ -221,5 +398,14 @@
 
 </main>
 
+<script>
+  document.querySelectorAll('tr.sys-row').forEach(function(row) {
+    row.addEventListener('click', function() {
+      var editRow = this.nextElementSibling;
+      var open = editRow.classList.toggle('open');
+      this.classList.toggle('open', open);
+    });
+  });
+</script>
 </body>
 </html>
