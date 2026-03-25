@@ -88,7 +88,7 @@ def get_trips(t1, t2, sys_name, feed_type, station_id, vehicle_type_id, frequenc
     elif station_id not in [None, "all"]:
         station_select = "station_id"
         station_groupby = "station_id"
-        station_where = f"station_id = {station_id}"
+        station_where = f"station_id = '{station_id}'"
 
     select = ",".join(x for x in [station_select, vehicle_select, select] if x != "")
     where = " AND ".join(x for x in [station_where, vehicle_where, where] if x != "")

@@ -124,6 +124,9 @@ class LiveAPI(APIBase):
         # Need to import as UTC then re-set TZ because of some DST issues.
         # df['datetime'] = pd.to_datetime(df['datetime'], utc=True).dt.tz_convert(self.info['tz'])
 
+        if df.empty or 'datetime' not in df.columns:
+            return df
+
         df = df.set_index('datetime')
 
         return df
