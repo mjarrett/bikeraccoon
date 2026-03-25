@@ -151,6 +151,46 @@ def admin():
             _save_systems(systems)
             return redirect('/admin')
 
+        elif action == 'delete_system':
+            sys_name = request.form.get('_system', '')
+            systems = _load_systems()
+            systems = [s for s in systems if s['name'] != sys_name]
+            _save_systems(systems)
+            return redirect('/admin')
+
+        elif action == 'add_system':
+            name = request.form.get('name', '').strip()
+            url = request.form.get('url', '').strip()
+            tz = request.form.get('tz', '').strip()
+            add_error = None
+            if not name or not url or not tz:
+                add_error = 'Name, GBFS URL, and timezone are required.'
+            else:
+                systems = _load_systems()
+                if any(s['name'] == name for s in systems):
+                    add_error = f'A system named "{name}" already exists.'
+                else:
+                    new_system = {
+                        'name': name,
+                        'url': url,
+                        'tz': tz,
+                        'tracking': request.form.get('tracking') == 'on',
+                        'track_stations': request.form.get('track_stations') == 'on',
+                        'track_free_bikes': request.form.get('track_free_bikes') == 'on',
+                    }
+                    for field in ('brand', 'city', 'province', 'country', 'gbfs_system_id'):
+                        val = request.form.get(field, '').strip()
+                        if val:
+                            new_system[field] = val
+                    systems.append(new_system)
+                    _save_systems(systems)
+                    return redirect('/admin')
+            keys = apidb.get_keys_with_stats(BR_DB_PATH)
+            recent = apidb.get_recent_requests(BR_DB_PATH)
+            systems_data = _load_systems()
+            return render_template("admin.html", keys=keys, recent=recent, new_key=None, env=BR_ENV,
+                                   systems_data=systems_data, add_error=add_error, add_open=True)
+
         else:
             name = request.form.get('name', '').strip()
             email = request.form.get('email', '').strip() or None
@@ -162,7 +202,7 @@ def admin():
     recent = apidb.get_recent_requests(BR_DB_PATH)
     systems_data = _load_systems()
     return render_template("admin.html", keys=keys, recent=recent, new_key=new_key, env=BR_ENV,
-                           systems_data=systems_data)
+                           systems_data=systems_data, add_error=None, add_open=False)
 
 
 @app.route('/systems', methods=['GET'])

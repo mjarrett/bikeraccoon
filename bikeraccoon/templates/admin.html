@@ -271,8 +271,13 @@
                     </label>
                   </div>
                 </div>
-                <div style="margin-top:1rem;">
+                <div style="margin-top:1rem;display:flex;justify-content:space-between;align-items:center;">
                   <button type="submit" class="btn-primary">Save</button>
+                  <button type="button"
+                    onclick="if(confirm('Delete {{ s.name }}? This cannot be undone.')) { this.closest('form').querySelector('[name=_action]').value='delete_system'; this.closest('form').submit(); }"
+                    style="background:none;border:1px solid #742a2a;border-radius:6px;padding:0.4rem 0.9rem;color:#fc8181;font-size:0.8rem;cursor:pointer;">
+                    Delete system
+                  </button>
                 </div>
               </form>
             </div>
@@ -285,6 +290,71 @@
     {% else %}
     <p class="empty">No systems configured.</p>
     {% endif %}
+
+    <div style="margin-top:1rem;">
+      <button type="button" id="add-sys-btn" class="btn-primary" onclick="toggleAddSystem()">+ Add system</button>
+    </div>
+
+    <div id="add-sys-form" style="display:{{ 'block' if add_open else 'none' }};margin-top:1rem;background:#1a202c;border:1px solid #2d3748;border-radius:6px;padding:1.25rem;">
+      {% if add_error %}
+      <p style="color:#fc8181;font-size:0.875rem;margin-bottom:1rem;">{{ add_error }}</p>
+      {% endif %}
+      <form method="post" action="/admin">
+        <input type="hidden" name="_action" value="add_system">
+        <div class="edit-grid">
+          <div class="field-group">
+            <label>Name <span style="color:#fc8181">*</span></label>
+            <input name="name" required placeholder="e.g. bst_toronto" value="{{ request.form.get('name', '') if add_open else '' }}">
+          </div>
+          <div class="field-group">
+            <label>Timezone <span style="color:#fc8181">*</span></label>
+            <input name="tz" required placeholder="e.g. America/Toronto" value="{{ request.form.get('tz', '') if add_open else '' }}">
+          </div>
+          <div class="field-group">
+            <label>Brand</label>
+            <input name="brand" placeholder="e.g. Bike Share Toronto" value="{{ request.form.get('brand', '') if add_open else '' }}">
+          </div>
+          <div class="field-group">
+            <label>City</label>
+            <input name="city" placeholder="e.g. Toronto" value="{{ request.form.get('city', '') if add_open else '' }}">
+          </div>
+          <div class="field-group">
+            <label>Province / State</label>
+            <input name="province" placeholder="e.g. ON" value="{{ request.form.get('province', '') if add_open else '' }}">
+          </div>
+          <div class="field-group">
+            <label>Country</label>
+            <input name="country" placeholder="e.g. CA" value="{{ request.form.get('country', '') if add_open else '' }}">
+          </div>
+          <div class="field-group" style="grid-column: 1 / -1;">
+            <label>GBFS URL <span style="color:#fc8181">*</span></label>
+            <input name="url" required placeholder="https://..." value="{{ request.form.get('url', '') if add_open else '' }}">
+          </div>
+          <div class="field-group">
+            <label>GBFS System ID <span style="color:#718096;font-weight:normal;">(MobilityData registry)</span></label>
+            <input name="gbfs_system_id" placeholder="e.g. bike_share_toronto" value="{{ request.form.get('gbfs_system_id', '') if add_open else '' }}">
+          </div>
+          <div class="checkboxes">
+            <label class="checkbox-label">
+              <input type="checkbox" name="tracking" checked>
+              Tracking enabled
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" name="track_stations" checked>
+              Track stations
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" name="track_free_bikes" checked>
+              Track free bikes
+            </label>
+          </div>
+        </div>
+        <div style="margin-top:1rem;display:flex;gap:0.75rem;">
+          <button type="submit" class="btn-primary">Add system</button>
+          <button type="button" onclick="toggleAddSystem()" style="background:none;border:1px solid #4a5568;border-radius:6px;padding:0.45rem 1rem;color:#a0aec0;font-size:0.875rem;cursor:pointer;">Cancel</button>
+        </div>
+      </form>
+    </div>
   </section>
 
   <section>
@@ -406,6 +476,11 @@
       this.classList.toggle('open', open);
     });
   });
+
+  function toggleAddSystem() {
+    var form = document.getElementById('add-sys-form');
+    form.style.display = form.style.display === 'none' ? 'block' : 'none';
+  }
 </script>
 </body>
 </html>
