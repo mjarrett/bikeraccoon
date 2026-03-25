@@ -143,12 +143,19 @@ def update_free_bike_status_raw(system):
     return True, None
 
 
-def send_alert_email(smtp_config, subject, body):
-    """Send an alert email via SMTP."""
+def send_alert_email(smtp_config, subject, body, html_body=None):
+    """Send an alert email via SMTP. If html_body is provided, sends multipart/alternative."""
     import smtplib
     from email.mime.text import MIMEText
+    from email.mime.multipart import MIMEMultipart
 
-    msg = MIMEText(body)
+    if html_body is not None:
+        msg = MIMEMultipart('alternative')
+        msg.attach(MIMEText(body, 'plain'))
+        msg.attach(MIMEText(html_body, 'html'))
+    else:
+        msg = MIMEText(body, 'plain')
+
     msg['Subject'] = subject
     msg['From'] = smtp_config['from']
     to = smtp_config['to']
@@ -205,8 +212,8 @@ def _query_trip_summary(system_data_path, feed):
     }
 
 
-def build_system_summary(system):
-    lines = []
+def _system_summary_data(system):
+    """Extract summary data for a system as a dict."""
     name = system['name']
     tz = system.get('tz', '?')
 
@@ -221,30 +228,87 @@ def build_system_summary(system):
     else:
         age_str, stale = '?', False
 
-    stale_flag = '  *** STALE ***' if stale else ''
-    lines.append(f"{'='*50}")
-    lines.append(f"  {name}  [{tz}]{stale_flag}")
-    lines.append(f"{'='*50}")
-    lines.append(f"  Last update : {_fmt_dt(latest_upd)}  ({age_str})")
-    lines.append(f"  Data range  : {_fmt_dt(system.get('tracking_start'))}  →  {_fmt_dt(system.get('tracking_end'))}")
-
     try:
         sdf = pd.read_parquet(pathlib.Path(system.data_path) / "stations.parquet")
         n_active = int(sdf['active'].sum()) if 'active' in sdf.columns else '?'
-        lines.append(f"  Stations    : {n_active} active / {len(sdf)} total")
+        stations = f"{n_active} active / {len(sdf)} total"
     except Exception:
-        lines.append("  Stations    : —")
+        stations = '—'
 
+    feeds = {}
+    for feed in ('station', 'free_bike'):
+        feeds[feed] = _query_trip_summary(system.data_path, feed)
+
+    return {
+        'name': name,
+        'tz': tz,
+        'latest_upd': latest_upd,
+        'age_str': age_str,
+        'stale': stale,
+        'tracking_start': system.get('tracking_start'),
+        'tracking_end': system.get('tracking_end'),
+        'stations': stations,
+        'feeds': feeds,
+    }
+
+
+def build_system_summary(system):
+    d = _system_summary_data(system)
+    lines = []
+    stale_flag = '  *** STALE ***' if d['stale'] else ''
+    lines.append(f"{'='*50}")
+    lines.append(f"  {d['name']}  [{d['tz']}]{stale_flag}")
+    lines.append(f"{'='*50}")
+    lines.append(f"  Last update : {_fmt_dt(d['latest_upd'])}  ({d['age_str']})")
+    lines.append(f"  Data range  : {_fmt_dt(d['tracking_start'])}  →  {_fmt_dt(d['tracking_end'])}")
+    lines.append(f"  Stations    : {d['stations']}")
     for feed in ('station', 'free_bike'):
         label = feed.replace('_', ' ').title()
-        s = _query_trip_summary(system.data_path, feed)
+        s = d['feeds'][feed]
         if s is None:
             lines.append(f"  {label:12s}: no data")
         else:
             lines.append(f"  {label:12s}: {s['first']} → {s['last']}")
             lines.append(f"  {'':12s}  last 24h — {s['trips_24']} trips, {s['returns_24']} returns")
-
     return '\n'.join(lines)
+
+
+def build_system_summary_html(system):
+    import html as _html
+    d = _system_summary_data(system)
+
+    header_bg = '#c0392b' if d['stale'] else '#2c3e50'
+    stale_badge = ' <span style="background:#e74c3c;color:#fff;padding:2px 8px;border-radius:3px;font-size:0.8em;vertical-align:middle;">STALE</span>' if d['stale'] else ''
+
+    rows = [
+        ('Last update', f"{_fmt_dt(d['latest_upd'])}  ({d['age_str']})"),
+        ('Data range', f"{_fmt_dt(d['tracking_start'])} &rarr; {_fmt_dt(d['tracking_end'])}"),
+        ('Stations', _html.escape(d['stations'])),
+    ]
+    for feed in ('station', 'free_bike'):
+        label = feed.replace('_', ' ').title()
+        s = d['feeds'][feed]
+        if s is None:
+            rows.append((label, 'no data'))
+        else:
+            rows.append((label, f"{_fmt_dt(s['first'])} &rarr; {_fmt_dt(s['last'])}"))
+            rows.append(('Last 24h', f"{s['trips_24']:,} trips, {s['returns_24']:,} returns"))
+
+    table_rows = ''.join(
+        f'<tr><td style="padding:5px 12px 5px 0;color:#666;white-space:nowrap;vertical-align:top;">{k}</td>'
+        f'<td style="padding:5px 0;">{v}</td></tr>'
+        for k, v in rows
+    )
+
+    return (
+        f'<div style="margin-bottom:24px;border:1px solid #ddd;border-radius:6px;overflow:hidden;">'
+        f'<div style="background:{header_bg};color:#fff;padding:10px 16px;font-size:1.05em;font-weight:bold;">'
+        f'{_html.escape(d["name"])}'
+        f'<span style="font-weight:normal;font-size:0.85em;margin-left:10px;opacity:0.8;">[{_html.escape(d["tz"])}]</span>'
+        f'{stale_badge}</div>'
+        f'<div style="padding:12px 16px;"><table style="border-collapse:collapse;font-size:0.95em;">{table_rows}</table></div>'
+        f'</div>'
+    )
 
 
 def build_daily_summary(systems):
@@ -252,6 +316,29 @@ def build_daily_summary(systems):
     header = f"Tracker status — {dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  [{socket.gethostname()}]\n"
     body = '\n\n'.join(build_system_summary(s) for s in systems)
     return header + '\n' + body
+
+
+def build_daily_summary_html(systems):
+    import socket
+    import html as _html
+    hostname = _html.escape(socket.gethostname())
+    timestamp = dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    system_blocks = '\n'.join(build_system_summary_html(s) for s in systems)
+    return f"""<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background:#f4f4f4;font-family:Arial,Helvetica,sans-serif;">
+<div style="max-width:620px;margin:24px auto;background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,0.1);overflow:hidden;">
+  <div style="background:#1a252f;color:#fff;padding:16px 24px;">
+    <div style="font-size:1.2em;font-weight:bold;">bikeraccoon tracker status</div>
+    <div style="font-size:0.85em;margin-top:4px;opacity:0.7;">{timestamp} &nbsp;&bull;&nbsp; {hostname}</div>
+  </div>
+  <div style="padding:20px 24px;">
+    {system_blocks}
+  </div>
+</div>
+</body>
+</html>"""
 
 
 def update_trips(system, feed_type, save_temp_data=False):

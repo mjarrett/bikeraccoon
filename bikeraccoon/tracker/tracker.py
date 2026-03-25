@@ -191,6 +191,7 @@ def tracker(systems_file='systems.json', log_path=None, data_path='tracker-data'
                         smtp_config,
                         subject=f"[bikeraccoon] {env_tag}Daily summary — {today}",
                         body=build_daily_summary(systems),
+                        html_body=build_daily_summary_html(systems),
                     )
                     logger.info("Daily summary email sent")
                 except Exception as e:
