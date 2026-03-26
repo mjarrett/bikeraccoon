@@ -253,7 +253,11 @@ def get_activity():
     frequency = request.args.get('frequency', default='h', type=str)
     station_id = request.args.get('station', default=None, type=str)
     limit = request.args.get('limit', default=None, type=int)
-    system = get_system_info(sys_name)
+    try:
+        system = get_system_info(sys_name)
+    except Exception:
+        return return_api_error(f"No data found for system '{sys_name}'")
+
     vehicle_type_id = request.args.get('vehicle', default=None, type=str)
     feed_type = request.args.get('feed', default='station', type=str)
 
@@ -262,7 +266,6 @@ def get_activity():
         t1 = string_to_datetime(t1, tz)
         t2 = string_to_datetime(t2, tz)
     except:
-
         return return_api_error()
 
     res = get_trips(t1, t2, sys_name, feed_type, station_id, vehicle_type_id, frequency, tz=tz)
