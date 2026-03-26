@@ -6,10 +6,29 @@ import datetime as dt
 from zoneinfo import ZoneInfo
 import pathlib
 
+import threading
+import time
 import duckdb
-
 from importlib.metadata import version as _get_version
+
+_con = duckdb.connect()
+_con_lock = threading.Lock()
+
+_cache = {}
+_CACHE_TTL = 60  # seconds
+
 version = _get_version("bikeraccoon")
+
+
+def _cache_get(key):
+    entry = _cache.get(key)
+    if entry and time.monotonic() - entry['ts'] < _CACHE_TTL:
+        return entry['value'], True
+    return None, False
+
+
+def _cache_set(key, value):
+    _cache[key] = {'value': value, 'ts': time.monotonic()}
 
 
 class BRJSONProvider(DefaultJSONProvider):
@@ -25,7 +44,14 @@ class BRJSONProvider(DefaultJSONProvider):
 
 
 def get_system_tz(sys_name):
-    return duckdb.query(f'''select tz from './tracker-data/{sys_name}/system.parquet' ''').fetchall()[0][0]
+    key = f'tz:{sys_name}'
+    value, hit = _cache_get(key)
+    if hit:
+        return value
+    with _con_lock:
+        value = _con.execute(f'''select tz from './tracker-data/{sys_name}/system.parquet' ''').fetchall()[0][0]
+    _cache_set(key, value)
+    return value
 
 
 def get_data_path(sys_name, feed_type, vehicle_type, freq):
@@ -53,8 +79,7 @@ def api_response(f):
 
 
 @api_response
-def get_trips(t1, t2, sys_name, feed_type, station_id, vehicle_type_id, frequency):
-    start = dt.datetime.now()
+def get_trips(t1, t2, sys_name, feed_type, station_id, vehicle_type_id, frequency, tz=None):
     data_path = get_data_path(sys_name, feed_type, vehicle_type_id, frequency)
 
     if frequency == 't':
@@ -90,21 +115,26 @@ def get_trips(t1, t2, sys_name, feed_type, station_id, vehicle_type_id, frequenc
         station_groupby = "station_id"
         station_where = f"station_id = '{station_id}'"
 
+    partition_where = (f"(year * 12 + month) BETWEEN "
+                       f"({t1.year} * 12 + {t1.month}) AND ({t2.year} * 12 + {t2.month})")
+
     select = ",".join(x for x in [station_select, vehicle_select, select] if x != "")
-    where = " AND ".join(x for x in [station_where, vehicle_where, where] if x != "")
+    where = " AND ".join(x for x in [station_where, vehicle_where, partition_where, where] if x != "")
     groupby = ",".join(x for x in [station_groupby, vehicle_groupby, groupby] if x != "")
 
-    tz = get_system_tz(sys_name)
+    if tz is None:
+        tz = get_system_tz(sys_name)
 
     query_text = f'''
            SET TIMEZONE='{tz}';
            SELECT {select}
-           FROM read_parquet('{data_path}')
+           FROM read_parquet('{data_path}', hive_partitioning=true)
            WHERE {where}
            {"GROUP BY" if groupby != "" else ""} {groupby}
            {orderby}
            '''
-    qry = duckdb.query(query_text)
+    with _con_lock:
+        qry = _con.execute(query_text)
     # -- Convert to dict
     res = [{k: v for k, v in zip(['station_id', 'vehicle_type_id', 'datetime', 'trips', 'returns'], x)}
            for x in qry.fetchall()]
@@ -140,6 +170,13 @@ def get_systems_info():
 
 
 def get_system_info(sys_name):
+    key = f'sysinfo:{sys_name}'
+    value, hit = _cache_get(key)
+    if hit:
+        return value
     tz = get_system_tz(sys_name)
-    qry = duckdb.query(f"set timezone='{tz}'; select * from './tracker-data/{sys_name}/system.parquet' ")
-    return qry.fetchdf().to_dict('records')[0]
+    with _con_lock:
+        qry = _con.execute(f"set timezone='{tz}'; select * from './tracker-data/{sys_name}/system.parquet' ")
+    value = qry.fetchdf().to_dict('records')[0]
+    _cache_set(key, value)
+    return value

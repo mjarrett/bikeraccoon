@@ -265,7 +265,7 @@ def get_activity():
 
         return return_api_error()
 
-    res = get_trips(t1, t2, sys_name, feed_type, station_id, vehicle_type_id, frequency)
+    res = get_trips(t1, t2, sys_name, feed_type, station_id, vehicle_type_id, frequency, tz=tz)
     return res
 
 
