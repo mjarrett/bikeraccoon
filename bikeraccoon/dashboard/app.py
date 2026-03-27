@@ -11,6 +11,9 @@ import bikeraccoon as br
 _env = os.environ.get('BR_ENV', '')
 _title = f'Bikeraccoon Dashboard [{_env}]' if _env and _env != 'PROD' else 'Bikeraccoon Dashboard'
 
+_api_url = os.environ.get('BR_API_URL', 'http://api.raccoon.bike')
+br.APIBase.api_base_url = _api_url
+
 app = dash.Dash(
     __name__,
     title=_title,
@@ -47,7 +50,7 @@ app.layout = html.Div([
             'fontWeight': '700',
         }),
         html.Div([
-            html.A('API', href='https://api.raccoon.bike', target='_blank', style={
+            html.A('API', href=_api_url, target='_blank', style={
                 'textDecoration': 'none',
                 'color': COLORS['muted'],
                 'fontSize': '0.95rem',
