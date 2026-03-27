@@ -13,13 +13,15 @@ from functools import cached_property, lru_cache
 class APIBase():
 
     api_base_url = 'http://api.raccoon.bike'
+    api_key = None
 
 
 class LiveAPI(APIBase):
     def __init__(self, system, api_key=None, echo=False):
         super().__init__()
         self.system = system
-        self.api_key = api_key
+        if api_key is not None:
+            self.api_key = api_key
         self.info = self.get_system_info()
         self.echo = echo
 

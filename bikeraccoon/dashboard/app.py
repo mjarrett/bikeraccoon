@@ -13,6 +13,9 @@ _title = f'Bikeraccoon Dashboard [{_env}]' if _env and _env != 'PROD' else 'Bike
 
 _api_url = os.environ.get('BR_API_URL', 'http://api.raccoon.bike')
 br.APIBase.api_base_url = _api_url
+_api_key = os.environ.get('BR_API_KEY')
+if _api_key:
+    br.APIBase.api_key = _api_key
 
 app = dash.Dash(
     __name__,
