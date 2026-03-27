@@ -1,6 +1,6 @@
 import os
 import dash
-from dash import dcc, html, Input, Output
+from dash import dcc, html, Input, Output, State, MATCH
 import plotly.graph_objects as go
 import pandas as pd
 import datetime as dt
@@ -261,9 +261,6 @@ def load_front_page(pathname):
     except Exception as e:
         return html.P(f'Error loading systems: {e}', style={'color': 'red'})
 
-    t2 = dt.datetime.now().replace(hour=23, minute=0, second=0, microsecond=0)
-    t1 = t2 - dt.timedelta(days=7)
-
     systems_sorted = sorted(systems, key=lambda s: (not s.get('tracking', False), s['name']))
 
     th_style = {
@@ -295,7 +292,10 @@ def load_front_page(pathname):
         else:
             tracking_start = 'N/A'
 
-        sparkline = _make_sparkline(s['name'], t1, t2) if tracking else html.Div()
+        sparkline_cell = (
+            html.Div(id={'type': 'sparkline', 'index': s['name']}, style={'height': '50px'})
+            if tracking else html.Div(style={'height': '50px'})
+        )
 
         status_badge = html.Span(
             'Active' if tracking else 'Inactive',
@@ -321,7 +321,7 @@ def load_front_page(pathname):
                 ),
                 html.Td(status_badge, style=td_style),
                 html.Td(tracking_start, style={**td_style, 'color': COLORS['muted'], 'fontSize': '0.9rem'}),
-                html.Td(sparkline, style={**td_style, 'width': '180px', 'padding': '0.25rem 1rem'}),
+                html.Td(sparkline_cell, style={**td_style, 'width': '180px', 'padding': '0.25rem 1rem'}),
             ], style={'backgroundColor': 'white'}, className='system-row')
         )
 
@@ -343,6 +343,20 @@ def load_front_page(pathname):
         }),
         style={'overflowX': 'auto'},
     )
+
+
+@app.callback(
+    Output({'type': 'sparkline', 'index': MATCH}, 'children'),
+    Input('url', 'pathname'),
+    State({'type': 'sparkline', 'index': MATCH}, 'id'),
+)
+def load_sparkline(pathname, sparkline_id):
+    if pathname and pathname.startswith('/system/'):
+        return dash.no_update
+    system_name = sparkline_id['index']
+    t2 = dt.datetime.now().replace(hour=23, minute=0, second=0, microsecond=0)
+    t1 = t2 - dt.timedelta(days=7)
+    return _make_sparkline(system_name, t1, t2)
 
 
 @app.callback(
