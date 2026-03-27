@@ -79,9 +79,10 @@ def migrate_system(system_dir: pathlib.Path, dry_run: bool = False) -> None:
         print(f"  Rebuilding daily from {hourly_dir}...")
         hourly_df = pd.read_parquet(hourly_dir)
         daily = (
-            hourly_df.set_index('datetime')
+            hourly_df[['datetime', 'station_id', 'vehicle_type_id', 'trips', 'returns']]
+            .set_index('datetime')
             .groupby([pd.Grouper(freq='d'), 'station_id', 'vehicle_type_id'], dropna=False)
-            .sum()
+            [['trips', 'returns']].sum()
             .reset_index()
         )
         daily['year'] = daily['datetime'].dt.year
