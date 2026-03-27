@@ -12,9 +12,7 @@ from functools import cached_property, lru_cache
 
 class APIBase():
 
-    def __init__(self):
-        self.api_base_url = 'http://api.raccoon.bike'
-        # self.api_base_url = 'http://api.mikejarrett.ca'
+    api_base_url = 'http://api.raccoon.bike'
 
 
 class LiveAPI(APIBase):
