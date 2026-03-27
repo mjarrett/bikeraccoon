@@ -53,6 +53,13 @@ app.layout = html.Div([
             'fontWeight': '700',
         }),
         html.Div([
+            html.A('Source', href='https://github.com/mjarrett/bikeraccoon', target='_blank', style={
+                'textDecoration': 'none',
+                'color': COLORS['muted'],
+                'fontSize': '0.95rem',
+                'fontWeight': '500',
+                'marginRight': '1.5rem',
+            }),
             html.A('API', href=_api_url, target='_blank', style={
                 'textDecoration': 'none',
                 'color': COLORS['muted'],
