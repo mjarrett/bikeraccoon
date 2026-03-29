@@ -107,7 +107,7 @@ def favicon():
 
 @app.route('/')
 def default():
-    return render_template("frontpage.html", env=BR_ENV)
+    return render_template("frontpage.html", env=BR_ENV, version=version)
 
 
 @app.route('/tests')
