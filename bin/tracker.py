@@ -20,9 +20,9 @@ if os.environ.get('BR_SMTP_HOST'):
         smtp_config['password'] = os.environ['BR_SMTP_PASSWORD']
 
 tracker(
-    systems_file=os.environ.get('BR_SYSTEMS_FILE', '/srv/br-tracker/systems.json'),
-    log_path=os.environ.get('BR_LOG_PATH', '/srv/br-tracker/logs/'),
-    data_path=os.environ.get('BR_DATA_PATH', '/srv/br-tracker/tracker-data/'),
+    systems_file=os.environ.get('BR_SYSTEMS_FILE', './systems.json'),
+    log_path=os.environ.get('BR_LOG_PATH', './logs/'),
+    data_path=os.environ.get('BR_DATA_PATH', './tracker-data/'),
     query_interval=int(os.environ.get('BR_QUERY_INTERVAL', 60)),
     update_interval=int(os.environ.get('BR_UPDATE_INTERVAL', 10)),
     station_check_hour=int(os.environ.get('BR_STATION_CHECK_HOUR', 4)),
