@@ -14,20 +14,20 @@ from .tracker_functions import *
 def update_system_raw(system):
     """Returns dict with feed success/error info for failure tracking in the main loop."""
     if not system['tracking']:
-        return {'station': None, 'free_bike': None}
+        return {'station': None, 'free_bike': None, 'station_cap_dropped': 0, 'free_bike_cap_dropped': 0}
 
     system.logger.info("querying GBFS info")
 
-    station_ok, station_err = None, None
-    free_bike_ok, free_bike_err = None, None
+    station_ok, station_err, station_cap_dropped = None, None, 0
+    free_bike_ok, free_bike_err, free_bike_cap_dropped = None, None, 0
 
     if system.get('track_stations', True):
-        station_ok, station_err = update_station_status_raw(system)
+        station_ok, station_err, station_cap_dropped = update_station_status_raw(system)
     else:
         system.logger.info("skipping station check")
 
     if system.get('track_free_bikes', True):
-        free_bike_ok, free_bike_err = update_free_bike_status_raw(system)
+        free_bike_ok, free_bike_err, free_bike_cap_dropped = update_free_bike_status_raw(system)
     else:
         system.logger.info("skipping free bike check")
 
@@ -36,6 +36,8 @@ def update_system_raw(system):
     return {
         'station': station_ok, 'station_error': station_err,
         'free_bike': free_bike_ok, 'free_bike_error': free_bike_err,
+        'station_cap_dropped': station_cap_dropped,
+        'free_bike_cap_dropped': free_bike_cap_dropped,
     }
 
 
@@ -105,6 +107,39 @@ def _handle_feed_alerts(systems, results, failure_threshold, smtp_config, logger
                     except Exception as e:
                         logger.warning(f"Failed to send alert email for {system['name']}: {e}")
 
+            # Raw data backlog tracking
+            cap_dropped = result.get(f'{feed}_cap_dropped') or 0
+            key_cap_alerted = f'__{feed}_cap_alert_sent'
+            if cap_dropped > 1:
+                if not system.get(key_cap_alerted):
+                    logger.warning(f"{system['name']} {feed} raw data backlog: {cap_dropped} snapshots dropped")
+                    system[key_cap_alerted] = True
+                    if smtp_config:
+                        try:
+                            send_alert_email(
+                                smtp_config,
+                                subject=f"[bikeraccoon] {env_tag}Raw data backlog: {system['name']} ({feed}) [{hostname}]",
+                                body=(
+                                    f"The raw {feed} file for '{system['name']}' has a backlog "
+                                    f"({cap_dropped} snapshots dropped in one cycle).\n\n"
+                                    f"This usually means update_trips is failing or too slow to keep up with queries.\n\n"
+                                    f"Server: {hostname}"
+                                ),
+                            )
+                        except Exception as e:
+                            logger.warning(f"Failed to send raw cap alert email for {system['name']}: {e}")
+            elif cap_dropped == 0 and system.get(key_cap_alerted):
+                if smtp_config:
+                    try:
+                        send_alert_email(
+                            smtp_config,
+                            subject=f"[bikeraccoon] {env_tag}RECOVERED: {system['name']} ({feed}) raw data backlog [{hostname}]",
+                            body=f"The raw {feed} backlog for '{system['name']}' has cleared. Data is being processed normally.\n\nServer: {hostname}",
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to send raw cap recovery email for {system['name']}: {e}")
+                system[key_cap_alerted] = False
+
 
 def tracker(systems_file='systems.json', log_path=None, data_path='tracker-data',
             update_interval=20, query_interval=20, station_check_hour=4,
@@ -132,6 +167,8 @@ def tracker(systems_file='systems.json', log_path=None, data_path='tracker-data'
         system.set_logger(log_path)
         system.data_path = f'{data_path}/{system["name"]}/'
         system.station_check_hour = station_check_hour
+        system.smtp_config = smtp_config
+        system.max_raw_snapshots = 2 * max(1, -(-update_interval * 60 // query_interval))  # 2x headroom, ceiling div
         system.check_url()
 
         # Set up system table

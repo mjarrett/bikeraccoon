@@ -36,3 +36,8 @@ Homepage = "https://raccoon.bike"
 
 [tool.setuptools.packages.find]
 include = ["bikeraccoon*"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]
