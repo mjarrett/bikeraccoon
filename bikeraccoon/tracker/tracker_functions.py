@@ -18,6 +18,21 @@ import duckdb
 logger = logging.getLogger('Tracker')
 
 
+def _trim_raw_snapshots(df, feed_type, system):
+    """Drop oldest snapshots if the raw file has grown beyond max_raw_snapshots.
+    Returns (trimmed_df, dropped_count)."""
+    max_snapshots = system.max_raw_snapshots
+    all_times = sorted(df['datetime'].unique())
+    if len(all_times) <= max_snapshots:
+        return df, 0
+    dropped = len(all_times) - max_snapshots
+    if dropped > 1:
+        system.logger.warning(
+            f"raw.{feed_type} has {len(all_times)} snapshots, dropping {dropped} oldest to cap at {max_snapshots}"
+        )
+    return df[df['datetime'].isin(all_times[-max_snapshots:])], dropped
+
+
 class GBFSSystem(UserDict):
 
     def set_logger(self, log_path):
@@ -98,7 +113,7 @@ def update_system_table(system):
 
 
 def update_station_status_raw(system):
-    """Returns (success, error_message)."""
+    """Returns (success, error_message, cap_dropped)."""
     system.logger.info("Updating station bikes")
     ddf_file = f"{system.data_path}/raw.station.parquet"
     try:
@@ -114,14 +129,15 @@ def update_station_status_raw(system):
         ddf = pd.concat([ddf, ddf_query])
     except Exception as e:
         system.logger.warning(f"gbfs query error, skipping stations_raw db update (url={system.get('url')}): {type(e).__name__}: {e}")
-        return False, str(e)
+        return False, str(e), 0
 
+    ddf, cap_dropped = _trim_raw_snapshots(ddf, 'station', system)
     ddf.to_parquet(ddf_file, index=False)
-    return True, None
+    return True, None, cap_dropped
 
 
 def update_free_bike_status_raw(system):
-    """Returns (success, error_message)."""
+    """Returns (success, error_message, cap_dropped)."""
     system.logger.info("Updating free bikes")
     bdf_file = f"{system.data_path}/raw.free_bike.parquet"
     try:
@@ -137,10 +153,11 @@ def update_free_bike_status_raw(system):
         bdf = pd.concat([bdf, bdf_query])
     except Exception as e:
         system.logger.warning(f"gbfs query error, skipping free_bikes_raw db update (url={system.get('url')}): {type(e).__name__}: {e}")
-        return False, str(e)
+        return False, str(e), 0
 
+    bdf, cap_dropped = _trim_raw_snapshots(bdf, 'free_bike', system)
     bdf.to_parquet(bdf_file, index=False)
-    return True, None
+    return True, None, cap_dropped
 
 
 def send_alert_email(smtp_config, subject, body, html_body=None):
