@@ -13,7 +13,6 @@ dependencies = [
     "duckdb",
     "pyarrow",
     "requests",
-    "timeout-decorator",
     "flask",
     "flask-cors",
     "pytz",

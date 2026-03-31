@@ -2,7 +2,6 @@ import pandas as pd
 import json
 import requests
 import datetime as dt
-import timeout_decorator
 import ssl
 from time import sleep
 
@@ -52,7 +51,6 @@ def get_vehicle_types_url(sys_url):
     return _lookup_feed(sys_url, 'vehicle_types')
 
 
-@timeout_decorator.timeout(30)
 def query_system_info(sys_url):
     url = get_system_info_url(sys_url)
     r = requests.get(url, timeout=_REQUEST_TIMEOUT)
@@ -60,7 +58,6 @@ def query_system_info(sys_url):
     return r.json()
 
 
-@timeout_decorator.timeout(30)
 def query_vehicle_types(sys_url):
     """
     Query vehicle_types.json
@@ -85,7 +82,6 @@ def query_vehicle_types(sys_url):
     return df
 
 
-@timeout_decorator.timeout(30)
 def query_station_status(sys_url):
     """
     Query station_status.json
@@ -140,7 +136,6 @@ def query_station_status(sys_url):
     return df
 
 
-@timeout_decorator.timeout(30)
 def query_free_bike_status(sys_url):
     """
     Query station status if vehicle types are specified.
@@ -205,7 +200,6 @@ def query_free_bike_status(sys_url):
     return df
 
 
-@timeout_decorator.timeout(30)
 def query_station_info(sys_url):
     """
     Query station_information.json

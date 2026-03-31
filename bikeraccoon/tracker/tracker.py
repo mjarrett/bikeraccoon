@@ -6,7 +6,7 @@ import sys
 import json
 import logging
 import pathlib
-from multiprocessing import Pool
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 
 from .tracker_functions import *
 
@@ -149,56 +149,72 @@ def tracker(systems_file='systems.json', log_path=None, data_path='tracker-data'
 
     last_summary_date = None
 
-    while True:
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        while True:
 
-        if dt.datetime.now() < query_time:
-            time.sleep(1)  # Check whether it's time to update every second (actual query interval time determined by
-            continue
-        else:
-            query_time = dt.datetime.now() + dt.timedelta(seconds=query_interval)
+            if dt.datetime.now() < query_time:
+                time.sleep(1)  # Check whether it's time to update every second (actual query interval time determined by
+                continue
+            else:
+                query_time = dt.datetime.now() + dt.timedelta(seconds=query_interval)
 
-        logger.info(f"start: {dt.datetime.now()}")
+            logger.info(f"start: {dt.datetime.now()}")
 
-        with Pool(4) as p:
-            raw_results = p.map(update_system_raw, systems)
-
-        _handle_feed_alerts(systems, raw_results, failure_threshold, smtp_config, logger)
-
-        if dt.datetime.now() > last_update + update_delta:
-            last_update = dt.datetime.now()
-
-            with Pool(4) as p:
-                res = p.map(update_system, systems)
-
-        today = dt.date.today()
-        if dt.datetime.now().hour == summary_hour and last_summary_date != today:
-            last_summary_date = today
-            if smtp_config:
+            futures = [executor.submit(update_system_raw, s) for s in systems]
+            raw_results = []
+            for s, f in zip(systems, futures):
                 try:
-                    for system in systems:
-                        try:
-                            meta = pd.read_parquet(
-                                pathlib.Path(system.data_path) / 'system.parquet'
-                            ).iloc[0].to_dict()
-                            for k in ('tracking_start', 'tracking_end', 'latest_update'):
-                                if k in meta:
-                                    system[k] = meta[k]
-                        except Exception:
-                            pass
-                    env = os.environ.get('BR_ENV', '')
-                    env_tag = f'[{env}] ' if env else ''
-                    send_alert_email(
-                        smtp_config,
-                        subject=f"[bikeraccoon] {env_tag}Daily summary — {today}",
-                        body=build_daily_summary(systems),
-                        html_body=build_daily_summary_html(systems),
-                    )
-                    logger.info("Daily summary email sent")
+                    raw_results.append(f.result(timeout=120))
+                except FuturesTimeoutError:
+                    logger.error(f"update_system_raw timed out for {s['name']}")
+                    raw_results.append({'station': False, 'station_error': 'timeout', 'free_bike': False, 'free_bike_error': 'timeout'})
                 except Exception as e:
-                    logger.warning(f"Failed to send daily summary email: {e}")
+                    logger.error(f"update_system_raw failed for {s['name']}: {e}")
+                    raw_results.append({'station': False, 'station_error': str(e), 'free_bike': False, 'free_bike_error': str(e)})
 
-        logger.info(f"end: {dt.datetime.now()}")
-        logger.debug(f"Next DB update: {last_update + update_delta}")
+            _handle_feed_alerts(systems, raw_results, failure_threshold, smtp_config, logger)
+
+            if dt.datetime.now() > last_update + update_delta:
+                last_update = dt.datetime.now()
+
+                futures = [executor.submit(update_system, s) for s in systems]
+                for s, f in zip(systems, futures):
+                    try:
+                        f.result(timeout=120)
+                    except FuturesTimeoutError:
+                        logger.error(f"update_system timed out for {s['name']}")
+                    except Exception as e:
+                        logger.error(f"update_system failed for {s['name']}: {e}")
+
+            today = dt.date.today()
+            if dt.datetime.now().hour == summary_hour and last_summary_date != today:
+                last_summary_date = today
+                if smtp_config:
+                    try:
+                        for system in systems:
+                            try:
+                                meta = pd.read_parquet(
+                                    pathlib.Path(system.data_path) / 'system.parquet'
+                                ).iloc[0].to_dict()
+                                for k in ('tracking_start', 'tracking_end', 'latest_update'):
+                                    if k in meta:
+                                        system[k] = meta[k]
+                            except Exception:
+                                pass
+                        env = os.environ.get('BR_ENV', '')
+                        env_tag = f'[{env}] ' if env else ''
+                        send_alert_email(
+                            smtp_config,
+                            subject=f"[bikeraccoon] {env_tag}Daily summary — {today}",
+                            body=build_daily_summary(systems),
+                            html_body=build_daily_summary_html(systems),
+                        )
+                        logger.info("Daily summary email sent")
+                    except Exception as e:
+                        logger.warning(f"Failed to send daily summary email: {e}")
+
+            logger.info(f"end: {dt.datetime.now()}")
+            logger.debug(f"Next DB update: {last_update + update_delta}")
 
 
 if __name__ == '__main__':
