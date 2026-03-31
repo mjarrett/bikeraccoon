@@ -404,20 +404,25 @@ def save_to_parquet(system, thdf, feed_type):
     outpath = pathlib.Path(f"{system.data_path}/")
     outpath.mkdir(parents=True, exist_ok=True)
 
-    hourly = thdf.copy()
-    hourly['year'] = hourly['datetime'].dt.year
-    hourly['month'] = hourly['datetime'].dt.month
-    hourly.to_parquet(outpath / f"trips.{feed_type}.hourly",
-                      partition_cols=['year', 'month'], index=False,
-                      existing_data_behavior='delete_matching')
+    thdf['year'] = thdf['datetime'].dt.year
+    thdf['month'] = thdf['datetime'].dt.month
+    thdf.to_parquet(outpath / f"trips.{feed_type}.hourly",
+                    partition_cols=['year', 'month'], index=False,
+                    existing_data_behavior='delete_matching')
 
-    daily = thdf.set_index('datetime').groupby(
-        [pd.Grouper(freq='d'), 'station_id', 'vehicle_type_id'], dropna=False).sum().reset_index()
+    daily = (
+        thdf[['datetime', 'station_id', 'vehicle_type_id', 'trips', 'returns']]
+        .set_index('datetime')
+        .groupby([pd.Grouper(freq='d'), 'station_id', 'vehicle_type_id'], dropna=False)
+        [['trips', 'returns']].sum()
+        .reset_index()
+    )
     daily['year'] = daily['datetime'].dt.year
     daily['month'] = daily['datetime'].dt.month
     daily.to_parquet(outpath / f"trips.{feed_type}.daily",
                      partition_cols=['year', 'month'], index=False,
                      existing_data_behavior='delete_matching')
+    del daily
 
 
 def trim_raw(fname):
