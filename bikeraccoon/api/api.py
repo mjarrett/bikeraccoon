@@ -107,7 +107,7 @@ def favicon():
 
 @app.route('/')
 def default():
-    return render_template("frontpage.html", env=BR_ENV)
+    return render_template("frontpage.html", env=BR_ENV, version=version)
 
 
 @app.route('/tests')
@@ -274,7 +274,7 @@ def get_activity():
 
 @app.route('/status')
 def get_status():
-    stale_threshold = dt.timedelta(minutes=5)
+    stale_threshold = dt.timedelta(minutes=15)
     now = dt.datetime.now(dt.timezone.utc)
     systems = []
     for path in sorted(pathlib.Path('./tracker-data').glob('*/system.parquet')):

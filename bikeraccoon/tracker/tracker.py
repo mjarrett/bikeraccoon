@@ -6,7 +6,7 @@ import sys
 import json
 import logging
 import pathlib
-from multiprocessing import Pool
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FuturesTimeoutError
 
 from .tracker_functions import *
 
@@ -14,20 +14,20 @@ from .tracker_functions import *
 def update_system_raw(system):
     """Returns dict with feed success/error info for failure tracking in the main loop."""
     if not system['tracking']:
-        return {'station': None, 'free_bike': None}
+        return {'station': None, 'free_bike': None, 'station_cap_dropped': 0, 'free_bike_cap_dropped': 0}
 
     system.logger.info("querying GBFS info")
 
-    station_ok, station_err = None, None
-    free_bike_ok, free_bike_err = None, None
+    station_ok, station_err, station_cap_dropped = None, None, 0
+    free_bike_ok, free_bike_err, free_bike_cap_dropped = None, None, 0
 
     if system.get('track_stations', True):
-        station_ok, station_err = update_station_status_raw(system)
+        station_ok, station_err, station_cap_dropped = update_station_status_raw(system)
     else:
         system.logger.info("skipping station check")
 
     if system.get('track_free_bikes', True):
-        free_bike_ok, free_bike_err = update_free_bike_status_raw(system)
+        free_bike_ok, free_bike_err, free_bike_cap_dropped = update_free_bike_status_raw(system)
     else:
         system.logger.info("skipping free bike check")
 
@@ -36,6 +36,8 @@ def update_system_raw(system):
     return {
         'station': station_ok, 'station_error': station_err,
         'free_bike': free_bike_ok, 'free_bike_error': free_bike_err,
+        'station_cap_dropped': station_cap_dropped,
+        'free_bike_cap_dropped': free_bike_cap_dropped,
     }
 
 
@@ -105,6 +107,39 @@ def _handle_feed_alerts(systems, results, failure_threshold, smtp_config, logger
                     except Exception as e:
                         logger.warning(f"Failed to send alert email for {system['name']}: {e}")
 
+            # Raw data backlog tracking
+            cap_dropped = result.get(f'{feed}_cap_dropped') or 0
+            key_cap_alerted = f'__{feed}_cap_alert_sent'
+            if cap_dropped > 1:
+                if not system.get(key_cap_alerted):
+                    logger.warning(f"{system['name']} {feed} raw data backlog: {cap_dropped} snapshots dropped")
+                    system[key_cap_alerted] = True
+                    if smtp_config:
+                        try:
+                            send_alert_email(
+                                smtp_config,
+                                subject=f"[bikeraccoon] {env_tag}Raw data backlog: {system['name']} ({feed}) [{hostname}]",
+                                body=(
+                                    f"The raw {feed} file for '{system['name']}' has a backlog "
+                                    f"({cap_dropped} snapshots dropped in one cycle).\n\n"
+                                    f"This usually means update_trips is failing or too slow to keep up with queries.\n\n"
+                                    f"Server: {hostname}"
+                                ),
+                            )
+                        except Exception as e:
+                            logger.warning(f"Failed to send raw cap alert email for {system['name']}: {e}")
+            elif cap_dropped == 0 and system.get(key_cap_alerted):
+                if smtp_config:
+                    try:
+                        send_alert_email(
+                            smtp_config,
+                            subject=f"[bikeraccoon] {env_tag}RECOVERED: {system['name']} ({feed}) raw data backlog [{hostname}]",
+                            body=f"The raw {feed} backlog for '{system['name']}' has cleared. Data is being processed normally.\n\nServer: {hostname}",
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to send raw cap recovery email for {system['name']}: {e}")
+                system[key_cap_alerted] = False
+
 
 def tracker(systems_file='systems.json', log_path=None, data_path='tracker-data',
             update_interval=20, query_interval=20, station_check_hour=4,
@@ -132,6 +167,8 @@ def tracker(systems_file='systems.json', log_path=None, data_path='tracker-data'
         system.set_logger(log_path)
         system.data_path = f'{data_path}/{system["name"]}/'
         system.station_check_hour = station_check_hour
+        system.smtp_config = smtp_config
+        system.max_raw_snapshots = 2 * max(1, -(-update_interval * 60 // query_interval))  # 2x headroom, ceiling div
         system.check_url()
 
         # Set up system table
@@ -149,56 +186,72 @@ def tracker(systems_file='systems.json', log_path=None, data_path='tracker-data'
 
     last_summary_date = None
 
-    while True:
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        while True:
 
-        if dt.datetime.now() < query_time:
-            time.sleep(1)  # Check whether it's time to update every second (actual query interval time determined by
-            continue
-        else:
-            query_time = dt.datetime.now() + dt.timedelta(seconds=query_interval)
+            if dt.datetime.now() < query_time:
+                time.sleep(1)  # Check whether it's time to update every second (actual query interval time determined by
+                continue
+            else:
+                query_time = dt.datetime.now() + dt.timedelta(seconds=query_interval)
 
-        logger.info(f"start: {dt.datetime.now()}")
+            logger.info(f"start: {dt.datetime.now()}")
 
-        with Pool(4) as p:
-            raw_results = p.map(update_system_raw, systems)
-
-        _handle_feed_alerts(systems, raw_results, failure_threshold, smtp_config, logger)
-
-        if dt.datetime.now() > last_update + update_delta:
-            last_update = dt.datetime.now()
-
-            with Pool(4) as p:
-                res = p.map(update_system, systems)
-
-        today = dt.date.today()
-        if dt.datetime.now().hour == summary_hour and last_summary_date != today:
-            last_summary_date = today
-            if smtp_config:
+            futures = [executor.submit(update_system_raw, s) for s in systems]
+            raw_results = []
+            for s, f in zip(systems, futures):
                 try:
-                    for system in systems:
-                        try:
-                            meta = pd.read_parquet(
-                                pathlib.Path(system.data_path) / 'system.parquet'
-                            ).iloc[0].to_dict()
-                            for k in ('tracking_start', 'tracking_end', 'latest_update'):
-                                if k in meta:
-                                    system[k] = meta[k]
-                        except Exception:
-                            pass
-                    env = os.environ.get('BR_ENV', '')
-                    env_tag = f'[{env}] ' if env else ''
-                    send_alert_email(
-                        smtp_config,
-                        subject=f"[bikeraccoon] {env_tag}Daily summary — {today}",
-                        body=build_daily_summary(systems),
-                        html_body=build_daily_summary_html(systems),
-                    )
-                    logger.info("Daily summary email sent")
+                    raw_results.append(f.result(timeout=120))
+                except FuturesTimeoutError:
+                    logger.error(f"update_system_raw timed out for {s['name']}")
+                    raw_results.append({'station': False, 'station_error': 'timeout', 'free_bike': False, 'free_bike_error': 'timeout'})
                 except Exception as e:
-                    logger.warning(f"Failed to send daily summary email: {e}")
+                    logger.error(f"update_system_raw failed for {s['name']}: {e}")
+                    raw_results.append({'station': False, 'station_error': str(e), 'free_bike': False, 'free_bike_error': str(e)})
 
-        logger.info(f"end: {dt.datetime.now()}")
-        logger.debug(f"Next DB update: {last_update + update_delta}")
+            _handle_feed_alerts(systems, raw_results, failure_threshold, smtp_config, logger)
+
+            if dt.datetime.now() > last_update + update_delta:
+                last_update = dt.datetime.now()
+
+                futures = [executor.submit(update_system, s) for s in systems]
+                for s, f in zip(systems, futures):
+                    try:
+                        f.result(timeout=120)
+                    except FuturesTimeoutError:
+                        logger.error(f"update_system timed out for {s['name']}")
+                    except Exception as e:
+                        logger.error(f"update_system failed for {s['name']}: {e}")
+
+            today = dt.date.today()
+            if dt.datetime.now().hour == summary_hour and last_summary_date != today:
+                last_summary_date = today
+                if smtp_config:
+                    try:
+                        for system in systems:
+                            try:
+                                meta = pd.read_parquet(
+                                    pathlib.Path(system.data_path) / 'system.parquet'
+                                ).iloc[0].to_dict()
+                                for k in ('tracking_start', 'tracking_end', 'latest_update'):
+                                    if k in meta:
+                                        system[k] = meta[k]
+                            except Exception:
+                                pass
+                        env = os.environ.get('BR_ENV', '')
+                        env_tag = f'[{env}] ' if env else ''
+                        send_alert_email(
+                            smtp_config,
+                            subject=f"[bikeraccoon] {env_tag}Daily summary — {today}",
+                            body=build_daily_summary(systems),
+                            html_body=build_daily_summary_html(systems),
+                        )
+                        logger.info("Daily summary email sent")
+                    except Exception as e:
+                        logger.warning(f"Failed to send daily summary email: {e}")
+
+            logger.info(f"end: {dt.datetime.now()}")
+            logger.debug(f"Next DB update: {last_update + update_delta}")
 
 
 if __name__ == '__main__':

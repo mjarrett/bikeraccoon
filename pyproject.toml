@@ -13,7 +13,6 @@ dependencies = [
     "duckdb",
     "pyarrow",
     "requests",
-    "timeout-decorator",
     "flask",
     "flask-cors",
     "pytz",
@@ -36,3 +35,10 @@ Homepage = "https://raccoon.bike"
 
 [tool.setuptools.packages.find]
 include = ["bikeraccoon*"]
+
+[dependency-groups]
+dev = [
+
+    "pre-commit>=4.5.1",
+    "pytest>=9.0.2",
+]
