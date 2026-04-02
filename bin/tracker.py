@@ -27,5 +27,6 @@ tracker(
     update_interval=int(os.environ.get('BR_UPDATE_INTERVAL', 10)),
     station_check_hour=int(os.environ.get('BR_STATION_CHECK_HOUR', 4)),
     failure_threshold=int(os.environ.get('BR_FAILURE_THRESHOLD', 1)),
+    summary_hour=int(os.environ.get('BR_SUMMARY_HOUR', 8)),
     smtp_config=smtp_config,
 )
