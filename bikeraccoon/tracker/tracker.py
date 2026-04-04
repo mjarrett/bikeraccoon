@@ -1,4 +1,5 @@
 import os
+import math
 import time
 import datetime as dt
 import pandas as pd
@@ -168,7 +169,7 @@ def tracker(systems_file='systems.json', log_path=None, data_path='tracker-data'
         system.data_path = f'{data_path}/{system["name"]}/'
         system.station_check_hour = station_check_hour
         system.smtp_config = smtp_config
-        system.max_raw_snapshots = 2 * max(1, -(-update_interval * 60 // query_interval))  # 2x headroom, ceiling div
+        system.max_raw_snapshots = 2 * math.ceil(update_interval * 60 / query_interval)
         system.check_url()
 
         # Set up system table
