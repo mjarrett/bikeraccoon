@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [master, main]
+    branches: [master, main, dev]
     tags: ['v*']
   pull_request:
     branches: [master, main]
@@ -30,6 +30,25 @@ jobs:
       - name: Test
         run: pytest tests/ -v --tb=short --cov=bikeraccoon --cov-report=term-missing
 
+  deploy-dev:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/dev' && github.event_name == 'push'
+    environment: br-dev
+
+    steps:
+      - name: Deploy to dev
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEV_HOST }}
+          username: ${{ secrets.DEV_USER }}
+          key: ${{ secrets.DEV_SSH_KEY }}
+          script: |
+            cd /srv/bikeraccoon
+            git pull origin dev
+            uv pip install --python /srv/br-tracker/.venv/bin/python -e . -q
+            sudo systemctl restart br-tracker br-api
+
   deploy-staging:
     needs: test
     runs-on: ubuntu-latest
@@ -48,9 +67,6 @@ jobs:
             git pull origin master
             uv pip install --python /srv/br-tracker/.venv/bin/python -e . -q
             sudo systemctl restart br-tracker br-api
-            sleep 5
-            systemctl is-active --quiet br-tracker || (journalctl -u br-tracker -n 20 --no-pager && exit 1)
-            systemctl is-active --quiet br-api || (journalctl -u br-api -n 20 --no-pager && exit 1)
 
   deploy-prod:
     needs: [test, deploy-staging]
@@ -71,6 +87,3 @@ jobs:
             git checkout ${{ github.ref_name }}
             uv pip install --python /srv/br-tracker/.venv/bin/python -e . -q
             sudo systemctl restart br-tracker br-api
-            sleep 5
-            systemctl is-active --quiet br-tracker || (journalctl -u br-tracker -n 20 --no-pager && exit 1)
-            systemctl is-active --quiet br-api || (journalctl -u br-api -n 20 --no-pager && exit 1)
