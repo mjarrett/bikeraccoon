@@ -1,0 +1,11 @@
+{
+  "sys_name": "mobi_vancouver",
+  "account": "vanbikesharebot.raccoon.bike",
+  "bsky_password": "",
+  "lang": "EN",
+  "brand": "Mobi",
+  "hashtags": ["#bikeyvr"],
+  "palette": ["#77ACA2", "#3286AD"],
+  "sys_type": "stations",
+  "extent": [-123.185, -123.056, 49.245, 49.315]
+}

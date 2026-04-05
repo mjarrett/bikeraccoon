@@ -6,3 +6,9 @@ __pycache__/
 build/
 dist/
 *.egg
+
+# Bot config files (contain credentials)
+bot.credentials.json
+bot.*.json
+!bot.*.sample.json
+!bot.sample.json

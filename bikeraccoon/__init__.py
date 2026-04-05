@@ -34,7 +34,11 @@ class LiveAPI(APIBase):
 
     def get_system_info(self):
         systems = get_systems()
-        return [x for x in systems if x['name'] == self.system][0]
+        info = [x for x in systems if x['name'] == self.system][0]
+        for key in ('tracking_start', 'tracking_end', 'latest_update'):
+            if info.get(key):
+                info[key] = pd.to_datetime(info[key], utc=True).to_pydatetime()
+        return info
 
     def get_station_trips(self, *args, **kwargs):
         kwargs['feed'] = 'station'
@@ -121,12 +125,11 @@ class LiveAPI(APIBase):
         if self.echo:
             print({k: v for k, v in r.json().items() if k != 'data'})
 
-        # Need to import as UTC then re-set TZ because of some DST issues.
-        # df['datetime'] = pd.to_datetime(df['datetime'], utc=True).dt.tz_convert(self.info['tz'])
-
         if df.empty or 'datetime' not in df.columns:
             return df
 
+        # Import as UTC then convert to system TZ to handle DST correctly
+        df['datetime'] = pd.to_datetime(df['datetime'], utc=True).dt.tz_convert(self.info['tz'])
         df = df.set_index('datetime')
 
         return df
@@ -155,7 +158,9 @@ def _dates2strings(t1, t2, freq='h'):
             t1 = t1.replace(hour=0, day=1, month=1)
             t2 = t1.replace(hour=23, day=31, month=12)
 
-    if t2 < t1:
+    t1_cmp = t1.replace(tzinfo=None)
+    t2_cmp = t2.replace(tzinfo=None)
+    if t2_cmp < t1_cmp:
         t1, t2 = t2, t1
 
     t1 = t1.strftime('%Y%m%d%H')
