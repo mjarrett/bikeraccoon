@@ -21,7 +21,7 @@ SYSTEMS_RESPONSE = {'data': [SYSTEM_INFO], 'query_time': '0:00:00.001', 'version
 
 TRIPS_RESPONSE = {
     'data': [
-        {'datetime': '2024-06-01T12:00:00', 'trips': 10, 'returns': 8,
+        {'datetime': '2024-06-01T12:00:00+00:00', 'trips': 10, 'returns': 8,
          'station_id': None, 'vehicle_type_id': None},
     ],
     'query_time': '0:00:00.001',

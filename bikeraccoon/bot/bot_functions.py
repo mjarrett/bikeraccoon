@@ -42,7 +42,9 @@ def post_bsky(account, password, text, images=[], descriptions=[], hashtags=[]):
 
 def check_zero_trips(t1, t2, api, m=0):
     thdf = api.get_station_trips(t1, t2, freq='d')
-    return thdf['trips'].sum() <= m
+    if thdf is None:
+        raise ValueError(f"No trip data returned for {api.sys_name}")
+    return bool(thdf['trips'].sum() <= m)
 
 
 def make_tweet_text(api, t1, path='./', lang='EN'):
