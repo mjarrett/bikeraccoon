@@ -36,6 +36,19 @@ BR_ADMIN_KEY = os.environ.get('BR_ADMIN_KEY', '')
 BR_ENV = os.environ.get('BR_ENV', '')
 BR_SYSTEMS_FILE = os.environ.get('BR_SYSTEMS_FILE', './systems.json')
 
+BR_SMTP_CONFIG = None
+if os.environ.get('BR_SMTP_HOST'):
+    BR_SMTP_CONFIG = {
+        'host': os.environ['BR_SMTP_HOST'],
+        'port': int(os.environ.get('BR_SMTP_PORT', 587)),
+        'from': os.environ['BR_SMTP_FROM'],
+        'to': os.environ['BR_SMTP_TO'],
+        'tls': os.environ.get('BR_SMTP_TLS', 'true').lower() == 'true',
+    }
+    if os.environ.get('BR_SMTP_USERNAME'):
+        BR_SMTP_CONFIG['username'] = os.environ['BR_SMTP_USERNAME']
+        BR_SMTP_CONFIG['password'] = os.environ['BR_SMTP_PASSWORD']
+
 
 def _load_systems():
     try:
@@ -52,7 +65,7 @@ def _save_systems(systems):
 
 apidb.init_db(BR_DB_PATH)
 
-NO_AUTH_PATHS = {'/', '/status', '/favicon.ico', '/tests', '/systems', '/stations', '/vehicles'}
+NO_AUTH_PATHS = {'/', '/status', '/favicon.ico', '/tests', '/systems', '/stations', '/vehicles', '/request-key'}
 
 
 @app.before_request
@@ -293,6 +306,43 @@ def get_status():
             pass
     active = bool(systems) and any(not s['stale'] for s in systems)
     return jsonify({'active': active, 'env': BR_ENV, 'systems': systems})
+
+
+@app.route('/request-key', methods=['POST'])
+def request_key():
+    import smtplib
+    import logging
+    from email.mime.text import MIMEText
+
+    logger = logging.getLogger('API')
+    name = request.form.get('name', '').strip()
+    email = request.form.get('email', '').strip()
+    use_case = request.form.get('use_case', '').strip()
+
+    if not name or not email:
+        return jsonify({'error': 'Name and email are required'}), 400
+
+    logger.info(f"API key request from {name} <{email}>")
+
+    if BR_SMTP_CONFIG:
+        try:
+            body = f"API key request\n\nName: {name}\nEmail: {email}\nUse case: {use_case or '(not provided)'}\n"
+            msg = MIMEText(body, 'plain')
+            msg['Subject'] = f'[bikeraccoon] API key request from {name}'
+            msg['From'] = BR_SMTP_CONFIG['from']
+            msg['To'] = BR_SMTP_CONFIG['to'] if isinstance(BR_SMTP_CONFIG['to'], str) else ', '.join(BR_SMTP_CONFIG['to'])
+            with smtplib.SMTP(BR_SMTP_CONFIG['host'], BR_SMTP_CONFIG.get('port', 587)) as server:
+                if BR_SMTP_CONFIG.get('tls', True):
+                    server.starttls()
+                if 'username' in BR_SMTP_CONFIG:
+                    server.login(BR_SMTP_CONFIG['username'], BR_SMTP_CONFIG['password'])
+                server.send_message(msg)
+        except Exception as e:
+            logger.warning(f"Failed to send API key request email: {e}")
+    else:
+        logger.warning("API key request received but SMTP is not configured")
+
+    return jsonify({'ok': True})
 
 
 @app.route('/gbfs', methods=['GET'])

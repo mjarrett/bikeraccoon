@@ -217,6 +217,48 @@
     .license-card h3 { font-size: 0.9rem; color: #a0aec0; margin-bottom: 0.4rem; }
     .license-card p { font-size: 0.875rem; margin: 0; }
 
+    .key-form {
+      display: none;
+      margin-top: 1rem;
+    }
+
+    .key-form.open { display: block; }
+
+    .key-form input, .key-form textarea {
+      width: 100%;
+      background: #171923;
+      border: 1px solid #4a5568;
+      border-radius: 6px;
+      color: #e2e8f0;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.9rem;
+      margin-bottom: 0.75rem;
+      font-family: inherit;
+    }
+
+    .key-form textarea { resize: vertical; min-height: 80px; }
+
+    .key-form input:focus, .key-form textarea:focus {
+      outline: none;
+      border-color: #63b3ed;
+    }
+
+    .btn {
+      display: inline-block;
+      padding: 0.4rem 1rem;
+      background: #2b6cb0;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      cursor: pointer;
+    }
+
+    .btn:hover { background: #2c5282; }
+
+    .form-success { color: #68d391; font-size: 0.9rem; margin-top: 0.5rem; }
+    .form-error { color: #fc8181; font-size: 0.9rem; margin-top: 0.5rem; }
+
     .env-banner {
       background: #744210;
       color: #fefcbf;
@@ -255,6 +297,22 @@
     <p>Many bikeshare systems publish real-time data via the <a href="https://github.com/NABSA/gbfs">GBFS specification</a>, including the number of bikes and docks at each station. By monitoring these counts over time, this tracker estimates trips — when bikes leave or arrive at a station.</p>
     <div class="note">Trip counts are estimates only and may differ from official figures.</div>
     <p>For a detailed explanation of the methodology, see <a href="https://notes.mikejarrett.ca/tracking-bikeshare-use-using-gbfs-feeds/">this blog post</a>.</p>
+  </section>
+
+  <section>
+    <h2>Access</h2>
+    <p>Most endpoints are public. The <code>/activity</code> endpoint requires an API key — pass it as <code>?key=YOUR_KEY</code>.</p>
+    <div class="note">Don't have a key? Request one below — it's free for non-commercial use.</div>
+    <button class="btn" onclick="document.getElementById('key-form').classList.toggle('open')">Request an API key</button>
+    <div class="key-form" id="key-form">
+      <form id="key-request-form" style="margin-top:1rem">
+        <input type="text" name="name" placeholder="Your name" required>
+        <input type="email" name="email" placeholder="Your email" required>
+        <textarea name="use_case" placeholder="Briefly describe your use case (optional)"></textarea>
+        <button type="submit" class="btn">Send request</button>
+        <div id="form-status"></div>
+      </form>
+    </div>
   </section>
 
   <section>
@@ -361,6 +419,28 @@
   const el = document.getElementById('activity-example');
   el.href = url;
   el.textContent = url;
+
+  document.getElementById('key-request-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    const status = document.getElementById('form-status');
+    const data = new FormData(this);
+    fetch('/request-key', { method: 'POST', body: data })
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok) {
+          status.className = 'form-success';
+          status.textContent = 'Request sent — we\'ll be in touch.';
+          document.getElementById('key-request-form').reset();
+        } else {
+          status.className = 'form-error';
+          status.textContent = data.error || 'Something went wrong.';
+        }
+      })
+      .catch(() => {
+        status.className = 'form-error';
+        status.textContent = 'Something went wrong.';
+      });
+  });
 
   fetch('/status')
     .then(r => r.json())
