@@ -22,7 +22,7 @@ jobs:
         uses: astral-sh/setup-uv@v5
 
       - name: Install dependencies
-        run: uv pip install --system -e . pytest pytest-cov flake8
+        run: uv pip install --system -e ".[bot]" pytest pytest-cov flake8
 
       - name: Lint
         run: flake8 bikeraccoon/ --max-line-length=120 --extend-ignore=E501,W503,E302,E303,F401,F403,F405,F841,E722
