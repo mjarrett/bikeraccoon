@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bikeraccoon"
-version = "3.0"
+version = "3.1"
 description = "Python utilities for tracking bike share usage"
 authors = [{ name = "Mike Jarrett", email = "msjarrett@gmail.com" }]
 requires-python = ">=3.11"
