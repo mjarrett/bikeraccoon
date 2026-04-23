@@ -83,15 +83,20 @@ def get_trips(t1, t2, sys_name, feed_type, station_id, vehicle_type_id, frequenc
     data_path = get_data_path(sys_name, feed_type, vehicle_type_id, frequency)
 
     if frequency == 't':
-        select = "FIRST(datetime),SUM(trips), SUM(returns)"
+        dt_select = "FIRST(datetime)"
         groupby = ""
         where = f"datetime BETWEEN '{t1}' and '{t2}'"
         orderby = ""
     else:
-        select = f"date_trunc('{frequency}',datetime),SUM(trips), SUM(returns)"
+        dt_select = f"date_trunc('{frequency}',datetime)"
         groupby = f"date_trunc('{frequency}',datetime)"
         where = f"datetime BETWEEN '{t1}' and '{t2}'"
         orderby = f"ORDER BY date_trunc('{frequency}',datetime)"
+
+    trips_sum  = "SUM(CASE WHEN COALESCE(is_renting, true) THEN trips ELSE 0 END)"
+    returns_sum = "SUM(CASE WHEN COALESCE(is_returning, true) THEN returns ELSE 0 END)"
+    select      = f"{dt_select},{trips_sum},{returns_sum}"
+    select_base = f"{dt_select},SUM(trips),SUM(returns)"
 
     vehicle_select = "null"
     vehicle_groupby = ""
@@ -118,24 +123,34 @@ def get_trips(t1, t2, sys_name, feed_type, station_id, vehicle_type_id, frequenc
     partition_where = (f"(year * 12 + month) BETWEEN "
                        f"({t1.year} * 12 + {t1.month}) AND ({t2.year} * 12 + {t2.month})")
 
-    select = ",".join(x for x in [station_select, vehicle_select, select] if x != "")
-    where = " AND ".join(x for x in [station_where, vehicle_where, partition_where, where] if x != "")
-    groupby = ",".join(x for x in [station_groupby, vehicle_groupby, groupby] if x != "")
+    select      = ",".join(x for x in [station_select, vehicle_select, select] if x != "")
+    select_base = ",".join(x for x in [station_select, vehicle_select, select_base] if x != "")
+    where       = " AND ".join(x for x in [station_where, vehicle_where, partition_where, where] if x != "")
+    groupby     = ",".join(x for x in [station_groupby, vehicle_groupby, groupby] if x != "")
 
     if tz is None:
         tz = get_system_tz(sys_name)
 
-    query_text = f'''
-           SET TIMEZONE='{tz}';
-           SELECT {select}
-           FROM read_parquet('{data_path}', hive_partitioning=true)
-           WHERE {where}
-           {"GROUP BY" if groupby != "" else ""} {groupby}
-           {orderby}
-           '''
+    def _build_query(sel):
+        return f'''
+               SET TIMEZONE='{tz}';
+               SELECT {sel}
+               FROM read_parquet('{data_path}', hive_partitioning=true)
+               WHERE {where}
+               {"GROUP BY" if groupby != "" else ""} {groupby}
+               {orderby}
+               '''
+
     try:
         with _con_lock:
-            qry = _con.execute(query_text)
+            qry = _con.execute(_build_query(select))
+    except duckdb.BinderException:
+        # Flag columns absent in old parquet files — retry without flag-aware expressions
+        try:
+            with _con_lock:
+                qry = _con.execute(_build_query(select_base))
+        except duckdb.IOException:
+            return []
     except duckdb.IOException:
         return []
     # -- Convert to dict
