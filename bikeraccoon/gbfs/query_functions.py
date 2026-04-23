@@ -96,8 +96,9 @@ def query_station_status(sys_url):
             res.append({'station_id': x['station_id'],
                         'vehicle_type_id': vehicle_type['vehicle_type_id'],
                         'num_bikes_available': vehicle_type['count'],
-                       'last_reported': x['last_reported'],
-                        'is_renting': x['is_renting']
+                        'last_reported': x['last_reported'],
+                        'is_renting': x['is_renting'],
+                        'is_returning': x.get('is_returning', True),
                         })
         return res
 
@@ -131,7 +132,10 @@ def query_station_status(sys_url):
 
     df['datetime'] = df['datetime'].dt.tz_localize('UTC')
 
-    df = df[['datetime', 'num_bikes_available', 'is_renting', 'station_id', 'vehicle_type_id']]
+    if 'is_returning' not in df.columns:
+        df['is_returning'] = True
+
+    df = df[['datetime', 'num_bikes_available', 'is_renting', 'is_returning', 'station_id', 'vehicle_type_id']]
 
     return df
 
