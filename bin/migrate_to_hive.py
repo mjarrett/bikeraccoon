@@ -53,25 +53,30 @@ def migrate_system(system_dir: pathlib.Path, dry_run: bool = False) -> None:
             continue
 
         hourly_dir.mkdir(parents=True, exist_ok=True)
+        frames = []
         for f in sorted(files):
             df = pd.read_parquet(f)
             print(f"    read {f.name}: {len(df):,} rows")
+            frames.append(df)
 
-            # Ensure partition columns are present
-            if 'year' not in df.columns:
-                df['year'] = df['datetime'].dt.year
-            if 'month' not in df.columns:
-                df['month'] = df['datetime'].dt.month
+        combined = pd.concat(frames, ignore_index=True)
+        del frames
 
-            df.to_parquet(
-                hourly_dir,
-                partition_cols=['year', 'month'],
-                index=False,
-                existing_data_behavior='delete_matching',
-            )
-            del df
-            print(f"    wrote → {hourly_dir}")
+        if 'year' not in combined.columns:
+            combined['year'] = combined['datetime'].dt.year
+        if 'month' not in combined.columns:
+            combined['month'] = combined['datetime'].dt.month
 
+        combined.to_parquet(
+            hourly_dir,
+            partition_cols=['year', 'month'],
+            index=False,
+            existing_data_behavior='delete_matching',
+        )
+        del combined
+        print(f"    wrote → {hourly_dir}")
+
+        for f in sorted(files):
             f.unlink()
             print(f"    removed {f.name}")
 
