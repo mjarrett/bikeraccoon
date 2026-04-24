@@ -395,9 +395,10 @@ def update_trips(system, feed_type, save_temp_data=False):
         thdf_historical = None
 
     thdf = pd.concat([thdf_historical, thdf])
-    thdf = thdf.groupby(['datetime', 'station_id', 'vehicle_type_id'], dropna=False).agg({
-        'returns': 'sum',
-        'trips': 'sum'})
+    flag_cols = [c for c in ('is_renting', 'is_returning') if c in thdf.columns]
+    agg_spec = {'returns': 'sum', 'trips': 'sum'}
+    agg_spec.update({c: 'max' for c in flag_cols})
+    thdf = thdf.groupby(['datetime', 'station_id', 'vehicle_type_id'], dropna=False).agg(agg_spec)
     thdf = thdf.reset_index()
 
     # Drop records in raw tables except for most recent query
@@ -427,11 +428,14 @@ def save_to_parquet(system, thdf, feed_type):
                     partition_cols=['year', 'month'], index=False,
                     existing_data_behavior='delete_matching')
 
+    flag_cols = [c for c in ('is_renting', 'is_returning') if c in thdf.columns]
+    daily_agg = {'trips': 'sum', 'returns': 'sum'}
+    daily_agg.update({c: 'max' for c in flag_cols})
     daily = (
-        thdf[['datetime', 'station_id', 'vehicle_type_id', 'trips', 'returns']]
+        thdf[['datetime', 'station_id', 'vehicle_type_id', 'trips', 'returns'] + flag_cols]
         .set_index('datetime')
         .groupby([pd.Grouper(freq='d'), 'station_id', 'vehicle_type_id'], dropna=False)
-        [['trips', 'returns']].sum()
+        .agg(daily_agg)
         .reset_index()
     )
     daily['year'] = daily['datetime'].dt.year
@@ -478,8 +482,17 @@ def make_station_trips(ddf):
     df_stack['returns'] = (-df_stack['diff']).clip(lower=0)
     df_stack = df_stack.drop(columns='diff')
 
+    flag_cols = [c for c in ('is_renting', 'is_returning') if c in ddf.columns]
+    if flag_cols:
+        flags = ddf.groupby(['datetime', 'station_id'])[flag_cols].max().reset_index()
+        df_stack = df_stack.merge(flags, on=['datetime', 'station_id'], how='left')
+
+    agg_spec = {'trips': 'sum', 'returns': 'sum'}
+    agg_spec.update({c: 'max' for c in flag_cols})
+
     df_stack = df_stack.set_index('datetime').groupby(
-        [pd.Grouper(freq='h'), 'station_id', 'vehicle_type_id'], dropna=False).sum().reset_index()
+        [pd.Grouper(freq='h'), 'station_id', 'vehicle_type_id'], dropna=False
+    ).agg(agg_spec).reset_index()
 
     return df_stack
 
@@ -604,13 +617,6 @@ def update_stations(system):
         system.logger.debug(f"Failed to load stations: {e}")
         return
 
-    # -- Query station status
-    try:
-        ddf = gbfs.query_station_status(system['url'])
-    except Exception as e:
-        system.logger.debug(f"Failed to load station status: {e}")
-        return
-
     # -- Add any legacy stations that aren't in current station query
     if sdf_current is not None:
 
@@ -618,10 +624,6 @@ def update_stations(system):
         if len(legacy_stations_df) > 0:
             legacy_stations_df['active'] = False
         sdf = pd.concat([sdf, legacy_stations_df])
-
-    # -- Run through station status data to label disabled stations
-    disabled_ids = ddf.loc[ddf['is_renting'] == 0, 'station_id']
-    sdf.loc[sdf['station_id'].isin(disabled_ids), 'active'] = False
 
     # -- Save stations file
     try:
