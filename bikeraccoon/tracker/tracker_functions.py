@@ -392,7 +392,7 @@ def update_trips(system, feed_type, save_temp_data=False):
         thdf_historical = None
     except Exception as e:
         system.logger.warning(f"Could not load historical {feed_type} parquet for {year_tag}: {type(e).__name__}: {e}")
-        thdf_historical = None
+        return
 
     thdf = pd.concat([thdf_historical, thdf])
     thdf = thdf.groupby(['datetime', 'station_id', 'vehicle_type_id'], dropna=False).agg({
@@ -411,9 +411,12 @@ def update_trips(system, feed_type, save_temp_data=False):
 
 
 def load_parquet(system, year_tag, feed_type):
-    outpath = pathlib.Path(f"{system.data_path}/")
-    parquet_dir = outpath / f"trips.{feed_type}.hourly"
-    return pd.read_parquet(parquet_dir, filters=[('year', '==', int(year_tag))])
+    parquet_dir = pathlib.Path(system.data_path) / f"trips.{feed_type}.hourly"
+    files = [str(p) for p in parquet_dir.rglob("*.parquet")
+             if f"year={year_tag}" in str(p)]
+    if not files:
+        raise FileNotFoundError(parquet_dir)
+    return pd.read_parquet(files)
 
 
 def save_to_parquet(system, thdf, feed_type):
