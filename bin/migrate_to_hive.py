@@ -72,6 +72,7 @@ def migrate_system(system_dir: pathlib.Path, dry_run: bool = False) -> None:
             partition_cols=['year', 'month'],
             index=False,
             existing_data_behavior='delete_matching',
+            basename_template='part-{i}.parquet',
         )
         del combined
         print(f"    wrote → {hourly_dir}")
@@ -97,6 +98,7 @@ def migrate_system(system_dir: pathlib.Path, dry_run: bool = False) -> None:
             partition_cols=['year', 'month'],
             index=False,
             existing_data_behavior='delete_matching',
+            basename_template='part-{i}.parquet',
         )
         del hourly_df, daily
         print(f"  wrote daily → {daily_dir}")

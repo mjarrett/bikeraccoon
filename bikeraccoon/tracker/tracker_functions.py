@@ -428,7 +428,8 @@ def save_to_parquet(system, thdf, feed_type):
     thdf['month'] = thdf['datetime'].dt.month
     thdf.to_parquet(outpath / f"trips.{feed_type}.hourly",
                     partition_cols=['year', 'month'], index=False,
-                    existing_data_behavior='delete_matching')
+                    existing_data_behavior='delete_matching',
+                    basename_template='part-{i}.parquet')
 
     daily = (
         thdf[['datetime', 'station_id', 'vehicle_type_id', 'trips', 'returns']]
@@ -441,7 +442,8 @@ def save_to_parquet(system, thdf, feed_type):
     daily['month'] = daily['datetime'].dt.month
     daily.to_parquet(outpath / f"trips.{feed_type}.daily",
                      partition_cols=['year', 'month'], index=False,
-                     existing_data_behavior='delete_matching')
+                     existing_data_behavior='delete_matching',
+                     basename_template='part-{i}.parquet')
     del daily
 
 
