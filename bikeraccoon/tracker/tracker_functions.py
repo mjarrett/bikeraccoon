@@ -385,9 +385,10 @@ def update_trips(system, feed_type, save_temp_data=False):
             return
 
     year_tag = thdf['datetime'].iloc[0].strftime('%Y')
+    month_tags = sorted(thdf['datetime'].dt.month.unique().tolist())
     # Add rows to measurements table
     try:
-        thdf_historical = load_parquet(system, year_tag, feed_type)
+        thdf_historical = load_parquet(system, year_tag, feed_type, months=month_tags)
     except FileNotFoundError:
         thdf_historical = None
     except Exception as e:
@@ -410,10 +411,16 @@ def update_trips(system, feed_type, save_temp_data=False):
     save_to_parquet(system, thdf, feed_type)
 
 
-def load_parquet(system, year_tag, feed_type):
+def load_parquet(system, year_tag, feed_type, months=None):
+    """Load hourly trip parquet for a given year, optionally scoped to specific months
+    to avoid reloading the whole year's history on every update cycle."""
     parquet_dir = pathlib.Path(system.data_path) / f"trips.{feed_type}.hourly"
-    files = [str(p) for p in parquet_dir.rglob("*.parquet")
-             if f"year={year_tag}" in str(p)]
+    year_part = f"year={year_tag}"
+    month_parts = {f"month={m}" for m in months} if months is not None else None
+    files = [
+        str(p) for p in parquet_dir.rglob("*.parquet")
+        if year_part in p.parts and (month_parts is None or month_parts & set(p.parts))
+    ]
     if not files:
         raise FileNotFoundError(parquet_dir)
     return pd.read_parquet(files)
