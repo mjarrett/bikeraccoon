@@ -6,13 +6,14 @@ import pytest
 from bikeraccoon.tracker.tracker_functions import make_station_trips, make_free_bike_trips
 
 
-def make_station_df(polls):
+def make_station_df(polls, is_renting=1, is_returning=1):
     """
     Build a raw station poll DataFrame.
     polls: list of (datetime, station_id, vehicle_type_id, num_bikes_available)
     """
     rows = [
-        {'datetime': ts, 'station_id': sid, 'vehicle_type_id': vt, 'num_bikes_available': n}
+        {'datetime': ts, 'station_id': sid, 'vehicle_type_id': vt, 'num_bikes_available': n,
+         'is_renting': is_renting, 'is_returning': is_returning}
         for ts, sid, vt, n in polls
     ]
     return pd.DataFrame(rows)
@@ -125,6 +126,76 @@ def test_station_output_columns():
     ])
     result = make_station_trips(df)
     assert set(result.columns) >= {'datetime', 'station_id', 'vehicle_type_id', 'trips', 'returns'}
+
+
+# ── is_renting / is_returning flags ──────────────────────────────────────────
+
+def test_station_flags_present_in_output():
+    """is_renting and is_returning columns appear in result when in input."""
+    df = make_station_df([(T0, 'A', 'bike', 5), (T1, 'A', 'bike', 4)])
+    result = make_station_trips(df)
+    assert 'is_renting' in result.columns
+    assert 'is_returning' in result.columns
+
+
+def test_station_flags_absent_without_input_columns():
+    """No flag columns in result when input has none (backward compat)."""
+    df = make_station_df([(T0, 'A', 'bike', 5), (T1, 'A', 'bike', 4)])
+    df = df.drop(columns=['is_renting', 'is_returning'])
+    result = make_station_trips(df)
+    assert 'is_renting' not in result.columns
+    assert 'is_returning' not in result.columns
+
+
+def test_station_active_all_hour_flags_one():
+    """Station active throughout → both flags are 1 in output."""
+    df = make_station_df([(T0, 'A', 'bike', 5), (T1, 'A', 'bike', 5)], is_renting=1, is_returning=1)
+    result = make_station_trips(df)
+    assert result['is_renting'].iloc[0] == 1
+    assert result['is_returning'].iloc[0] == 1
+
+
+def test_station_not_renting_flag_zero():
+    """Station not renting at any poll → hourly is_renting=0."""
+    df = make_station_df([(T0, 'A', 'bike', 5), (T1, 'A', 'bike', 5)], is_renting=0, is_returning=1)
+    result = make_station_trips(df)
+    assert result['is_renting'].iloc[0] == 0
+
+
+def test_station_not_returning_flag_zero():
+    """Station not returning at any poll → hourly is_returning=0."""
+    df = make_station_df([(T0, 'A', 'bike', 5), (T1, 'A', 'bike', 5)], is_renting=1, is_returning=0)
+    result = make_station_trips(df)
+    assert result['is_returning'].iloc[0] == 0
+
+
+def test_station_flag_max_over_hour():
+    """If station was active for any poll in the hour, flag is 1 (max)."""
+    rows = [
+        {'datetime': T0, 'station_id': 'A', 'vehicle_type_id': 'bike', 'num_bikes_available': 5,
+         'is_renting': 0, 'is_returning': 1},
+        {'datetime': T1, 'station_id': 'A', 'vehicle_type_id': 'bike', 'num_bikes_available': 5,
+         'is_renting': 1, 'is_returning': 1},
+    ]
+    result = make_station_trips(pd.DataFrame(rows))
+    assert result['is_renting'].iloc[0] == 1
+
+
+def test_station_flags_per_station():
+    """Flags are tracked independently per station."""
+    rows = [
+        {'datetime': T0, 'station_id': 'A', 'vehicle_type_id': 'bike', 'num_bikes_available': 5,
+         'is_renting': 0, 'is_returning': 1},
+        {'datetime': T0, 'station_id': 'B', 'vehicle_type_id': 'bike', 'num_bikes_available': 3,
+         'is_renting': 1, 'is_returning': 1},
+        {'datetime': T1, 'station_id': 'A', 'vehicle_type_id': 'bike', 'num_bikes_available': 5,
+         'is_renting': 0, 'is_returning': 1},
+        {'datetime': T1, 'station_id': 'B', 'vehicle_type_id': 'bike', 'num_bikes_available': 3,
+         'is_renting': 1, 'is_returning': 1},
+    ]
+    result = make_station_trips(pd.DataFrame(rows))
+    assert result.loc[result['station_id'] == 'A', 'is_renting'].iloc[0] == 0
+    assert result.loc[result['station_id'] == 'B', 'is_renting'].iloc[0] == 1
 
 
 # ── make_free_bike_trips ──────────────────────────────────────────────────────
